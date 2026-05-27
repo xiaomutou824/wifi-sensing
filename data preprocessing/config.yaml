@@ -1,0 +1,159 @@
+# CSI 数据预处理配置文件
+# 适配 ESP32-S3 四节点 CSI 采集系统
+
+# ==================== 数据路径 ====================
+data:
+  # CSV 数据文件搜索路径，支持 glob 模式
+  csv_paths:
+    - "../CSI collection/data/*.csv"
+  
+  # 输出目录
+  output_dir: "./processed"
+  
+  # 训练/验证/测试划分比例（按 session 或文件划分时无效）
+  split_ratio:
+    train: 0.7
+    val: 0.15
+    test: 0.15
+  
+  # 是否按 session（采集日期）划分，而非随机划分
+  # 强烈建议设为 true，以验证跨时间泛化能力
+  split_by_session: true
+
+# ==================== CSI 参数 ====================
+csi:
+  # 子载波数（I/Q 对数）
+  n_subcarriers: 64
+  
+  # CSI 字节长度（128 bytes = 64 I/Q 对）
+  csi_len: 128
+  
+  # 期望帧率（fps），用于计算窗口时长
+  sample_rate: 87
+  
+  # 节点数
+  n_nodes: 4
+
+# ==================== 预处理 ====================
+preprocess:
+  # ---- 异常帧过滤 ----
+  filter:
+    # 丢弃 first_word_invalid == 1 的帧
+    first_word_invalid: true
+    
+    # 丢弃 csi_len 不匹配的帧
+    filter_by_csi_len: true
+    expected_csi_len: 128
+    
+    # 丢弃 I/Q 解析数量不对的帧
+    filter_by_iq_count: true
+    expected_iq_pairs: 64
+    
+    # RSSI 范围过滤（可选），用于剔除极端异常值
+    rssi_range: [-90, -10]  # null 表示不过滤
+  
+  # ---- I/Q 转换 ----
+  # 输出格式: amplitude | phase | both
+  # amplitude: 仅幅度（推荐）
+  # phase: 仅相位（易受频偏影响）
+  # both: [幅度, 相位] 拼接
+  output_type: "amplitude"
+  
+  # ---- 去零子载波 ----
+  # true: 自动去掉在所有帧中幅度恒为 0 的子载波
+  # false: 保留全部
+  remove_zero_subcarriers: true
+  
+  # ---- 归一化 ----
+  # 可选: none | minmax | zscore | energy
+  # none: 不做归一化
+  # minmax: 全局 Min-Max 缩放到 [0, 1]
+  # zscore: 全局 Z-score 标准化
+  # energy: 每帧能量归一化（除以该帧幅度平方和）
+  normalize: "zscore"
+  
+  # 归一化统计量保存路径（训练集统计，用于验证/测试集）
+  norm_stats_path: "./processed/norm_stats.pkl"
+
+# ==================== 滑动窗口 ====================
+window:
+  # 窗口大小（帧数）
+  # 128 帧 ≈ 1.5s (@87fps)
+  # 256 帧 ≈ 3.0s (@87fps)
+  size: 128
+  
+  # 步长（帧数）
+  # 50% 重叠: stride = size // 2 = 64
+  stride: 64
+  
+  # 最小窗口数（过滤过短片段）
+  min_windows: 2
+  
+  # 标签策略
+  # majority: 窗口内出现最多的标签
+  # center: 取中心帧的标签
+  # last: 取最后一帧的标签
+  label_strategy: "majority"
+
+# ==================== 动作切分 ====================
+segment:
+  # 是否启用自动切分
+  enabled: false
+  
+  # 切分算法参数
+  # 基于帧间方差阈值检测动作起止
+  window_size: 50        # 用于计算基线的窗口（帧）
+  threshold_ratio: 3.0   # 方差超过基线的倍数判定为动作
+  min_segment_len: 30    # 最小动作片段长度（帧）
+  padding: 15            # 动作前后保留的静止帧数
+
+# ==================== 数据增强 ====================
+augment:
+  # 仅在训练时启用
+  enabled: true
+  
+  # ---- 时间域 ----
+  time_shift: true
+  time_shift_range: 10   # 最大偏移帧数
+  
+  time_stretch: true
+  time_stretch_range: [0.8, 1.2]  # 缩放因子范围
+  
+  # ---- 幅度域 ----
+  gaussian_noise: 0.01   # 噪声标准差（相对幅度 std 的比例），0 表示禁用
+  amplitude_scale: 0.1   # 幅度缩放范围 [1-scale, 1+scale]，0 表示禁用
+  
+  subcarrier_mask_ratio: 0.05   # 随机 mask 子载波比例，0 表示禁用
+  timestep_mask_ratio: 0.05     # 随机 mask 时间步比例，0 表示禁用
+  
+  # ---- Mixup ----
+  mixup: true
+  mixup_alpha: 0.4
+  
+  # ---- 类别不平衡 ----
+  # 过采样：对少数类重复采样
+  oversample: true
+  # 类别权重（用于 DataLoader 的 WeightedRandomSampler）
+  class_weights:
+    idle: 1.0
+    walking: 1.0
+    sitting_down: 1.2
+    standing_up: 1.2
+    fall: 3.0
+
+# ==================== 特征工程（供传统 ML） ====================
+features:
+  # 是否生成手工特征（供 XGBoost 等使用）
+  enabled: false
+  
+  # 时域统计特征
+  temporal_stats: ["mean", "std", "max", "min", "ptp", "energy", "skewness", "kurtosis"]
+  
+  # 差分特征
+  diff_stats: ["mean", "std", "energy"]
+  
+  # RSSI 特征
+  rssi_stats: ["mean", "std", "ptp"]
+  
+  # 子载波间相关性
+  inter_carrier_corr: true

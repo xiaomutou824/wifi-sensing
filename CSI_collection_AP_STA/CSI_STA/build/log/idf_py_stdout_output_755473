@@ -1,0 +1,71 @@
+Command: ninja flash
+[1/5] cd /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA/build/esp-idf/esptool_py && /home/xing/.espressif/python_env/idf5.5_py3.10_env/bin/python /home/xing/.espressif/v5.5.4/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA/build/partition_table/partition-table.bin /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA/build/csi_sta.bin
+csi_sta.bin binary size 0xb98d0 bytes. Smallest app partition is 0x100000 bytes. 0x46730 bytes (28%) free.
+[2/5] Performing build step for 'bootloader'
+[1/1] cd /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA/build/bootloader/esp-idf/esptool_py && /home/xing/.espressif/python_env/idf5.5_py3.10_env/bin/python /home/xing/.espressif/v5.5.4/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x0 /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA/build/bootloader/bootloader.bin
+Bootloader binary size 0x5160 bytes. 0x2ea0 bytes (36%) free.
+[3/5] No install step for 'bootloader'
+[4/5] Completed 'bootloader'
+[4/5] cd /home/xing/.espressif/v5.5.4/esp-idf/components/esptool_py && /home/xing/.espressif/tools/cmake/3.30.2/bin/cmake -D IDF_PATH=/home/xing/.espressif/v5.5.4/esp-idf -D "SERIAL_TOOL=/home/xing/.espressif/python_env/idf5.5_py3.10_env/bin/python;;/home/xing/.espressif/v5.5.4/esp-idf/components/esptool_py/esptool/esptool.py;--chip;esp32s3" -D "SERIAL_TOOL_ARGS=--before=default_reset;--after=hard_reset;write_flash;@flash_args" -D WORKING_DIRECTORY=/home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA/build -P /home/xing/.espressif/v5.5.4/esp-idf/components/esptool_py/run_serial_tool.cmake
+esptool.py --chip esp32s3 -p /dev/ttyUSB0 -b 460800 --before=default_reset --after=hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size 2MB 0x0 bootloader/bootloader.bin 0x10000 csi_sta.bin 0x8000 partition_table/partition-table.bin
+esptool.py v4.12.dev2
+Serial port /dev/ttyUSB0
+Connecting....
+Chip is ESP32-S3 (QFN56) (revision v0.2)
+Features: WiFi, BLE, Embedded PSRAM 8MB (AP_3v3)
+Crystal is 40MHz
+MAC: e0:72:a1:f2:fa:5c
+Uploading stub...
+Running stub...
+Stub running...
+Changing baud rate to 460800
+Changed.
+Configuring flash size...
+Flash will be erased from 0x00000000 to 0x00005fff...
+Flash will be erased from 0x00010000 to 0x000c9fff...
+Flash will be erased from 0x00008000 to 0x00008fff...
+SHA digest in image updated
+Compressed 20832 bytes to 13348...
+Writing at 0x00000000... (100 %)
+Wrote 20832 bytes (13348 compressed) at 0x00000000 in 0.5 seconds (effective 314.7 kbit/s)...
+Hash of data verified.
+Compressed 760016 bytes to 477094...
+Writing at 0x00010000... (3 %)
+Writing at 0x0001c92f... (6 %)
+Writing at 0x0002583c... (10 %)
+Writing at 0x00030ccf... (13 %)
+Writing at 0x0003719b... (16 %)
+Writing at 0x0003d587... (20 %)
+Writing at 0x000433dd... (23 %)
+Writing at 0x00049192... (26 %)
+Writing at 0x0004eade... (30 %)
+Writing at 0x00054783... (33 %)
+Writing at 0x0005a451... (36 %)
+Writing at 0x00060324... (40 %)
+Writing at 0x00065f6d... (43 %)
+Writing at 0x0006b11d... (46 %)
+Writing at 0x00070523... (50 %)
+Writing at 0x00075f03... (53 %)
+Writing at 0x0007b4d9... (56 %)
+Writing at 0x00080805... (60 %)
+Writing at 0x00085e44... (63 %)
+Writing at 0x0008bbdb... (66 %)
+Writing at 0x00091476... (70 %)
+Writing at 0x000971c2... (73 %)
+Writing at 0x0009cbb1... (76 %)
+Writing at 0x000a238b... (80 %)
+Writing at 0x000aae6a... (83 %)
+Writing at 0x000b0c88... (86 %)
+Writing at 0x000b6dbf... (90 %)
+Writing at 0x000bcf8d... (93 %)
+Writing at 0x000c31e0... (96 %)
+Writing at 0x000c8aa1... (100 %)
+Wrote 760016 bytes (477094 compressed) at 0x00010000 in 10.9 seconds (effective 556.7 kbit/s)...
+Hash of data verified.
+Compressed 3072 bytes to 103...
+Writing at 0x00008000... (100 %)
+Wrote 3072 bytes (103 compressed) at 0x00008000 in 0.0 seconds (effective 556.1 kbit/s)...
+Hash of data verified.
+
+Leaving...
+Hard resetting via RTS pin...

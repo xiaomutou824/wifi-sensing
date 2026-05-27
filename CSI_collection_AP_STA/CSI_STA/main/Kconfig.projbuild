@@ -1,0 +1,81 @@
+menu "CSI STA Receiver Configuration"
+
+    config CSI_AP_SSID
+        string "Target SoftAP SSID"
+        default "CSI_AP_S3"
+
+    config CSI_AP_PASSWORD
+        string "Target SoftAP password"
+        default "12345678"
+
+    config CSI_AP_CHANNEL
+        int "Target 2.4 GHz Wi-Fi channel"
+        range 1 13
+        default 6
+
+    config CSI_NODE_ID
+        int "CSI receiver node ID"
+        range 1 255
+        default 1
+
+    choice CSI_MODE
+        prompt "CSI capture mode"
+        default CSI_MODE_MERGED_STABLE
+
+        config CSI_MODE_RAW_HTLTF
+            bool "raw_htltf: raw HT-LTF only"
+
+        config CSI_MODE_ROUTER_COMPATIBLE_LLTF
+            bool "router_compatible_lltf: LLTF compatible mode"
+
+        config CSI_MODE_MERGED_STABLE
+            bool "merged_stable: LLTF + HT-LTF merged and smoothed"
+
+        config CSI_MODE_RESEARCH_FULL
+            bool "research_full: all LTF fields, minimal processing"
+    endchoice
+
+    config CSI_FILTER_AP_BSSID
+        bool "Only print CSI frames from the configured AP BSSID"
+        default y
+
+    config CSI_FILTER_STA_DST_MAC
+        bool "Only print CSI frames addressed to this STA"
+        default y
+
+    config CSI_FILTER_HT_FRAMES
+        bool "Only print HT 802.11n CSI frames"
+        default y
+
+    config CSI_ENABLE_SELF_PING
+        bool "Generate CSI traffic by pinging the AP gateway"
+        default y
+
+    config CSI_SELF_PING_RATE_HZ
+        int "Ping rate in Hz"
+        range 1 100
+        default 30
+        depends on CSI_ENABLE_SELF_PING
+
+    config CSI_SELF_PING_PAYLOAD_BYTES
+        int "Ping payload size in bytes"
+        range 8 1472
+        default 32
+        depends on CSI_ENABLE_SELF_PING
+
+    config CSI_SELF_PING_TIMEOUT_MS
+        int "Ping timeout in milliseconds"
+        range 10 5000
+        default 100
+        depends on CSI_ENABLE_SELF_PING
+
+    config CSI_STATS_INTERVAL_SEC
+        int "Statistics log interval in seconds"
+        range 1 60
+        default 5
+
+    config CSI_PRINT_RAW_IQ
+        bool "Print raw CSI I/Q bytes"
+        default y
+
+endmenu

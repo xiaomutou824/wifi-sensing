@@ -1,0 +1,2 @@
+source /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA/build/gdbinit/symbols
+source /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA/build/gdbinit/connect

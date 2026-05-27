@@ -1,0 +1,28 @@
+menu "CSI AP Configuration"
+
+    config CSI_AP_SSID
+        string "SoftAP SSID"
+        default "CSI_AP_S3"
+
+    config CSI_AP_PASSWORD
+        string "SoftAP password"
+        default "12345678"
+        help
+            Use at least 8 characters for WPA2. Leave empty for open AP.
+
+    config CSI_AP_CHANNEL
+        int "Fixed 2.4 GHz Wi-Fi channel"
+        range 1 13
+        default 6
+
+    config CSI_AP_MAX_STA_CONN
+        int "SoftAP max station connections"
+        range 1 4
+        default 1
+
+    config CSI_STATS_INTERVAL_SEC
+        int "Statistics log interval in seconds"
+        range 1 60
+        default 5
+
+endmenu

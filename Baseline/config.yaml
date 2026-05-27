@@ -1,0 +1,127 @@
+# CSI 动作识别 Baseline 配置文件（传统机器学习）
+
+# ==================== 数据路径 ====================
+data:
+  # CSV 文件搜索路径（相对于 Baseline/ 或绝对路径）
+  csv_paths:
+    - "../CSI collection/data/*.csv"
+  
+  # 输出目录
+  output_dir: "./output"
+  
+  # 训练/验证/测试划分
+  split_ratio:
+    train: 0.7
+    val: 0.15
+    test: 0.15
+  
+  # 是否按采集日期划分（强烈建议 true）
+  split_by_session: true
+
+# ==================== 预处理参数 ====================
+# 引用 data preprocessing/ 中的配置
+preprocess:
+  filter:
+    first_word_invalid: true
+    expected_csi_len: 128
+    filter_by_csi_len: true
+    expected_iq_pairs: 64
+    filter_by_iq_count: true
+    rssi_range: [-90, -10]
+  
+  output_type: "amplitude"
+  remove_zero_subcarriers: true
+  normalize: "zscore"   # zscore / minmax / energy / none
+
+window:
+  size: 128
+  stride: 64
+  min_windows: 1
+  label_strategy: "majority"
+
+# ==================== 特征工程 ====================
+features:
+  # 时域统计特征
+  temporal_stats:
+    - mean
+    - std
+    - max
+    - min
+    - ptp
+    - energy
+    - skewness
+    - kurtosis
+  
+  # 差分特征
+  diff_stats:
+    - mean
+    - std
+    - energy
+  
+  # RSSI 特征
+  rssi_stats:
+    - mean
+    - std
+    - ptp
+  
+  # 子载波间相关性
+  inter_carrier_corr: true
+
+# ==================== 模型配置 ====================
+models:
+  # XGBoost（主模型，推荐）
+  xgboost:
+    enabled: true
+    n_estimators: 200
+    max_depth: 6
+    learning_rate: 0.1
+    subsample: 0.8
+    colsample_bytree: 0.8
+    objective: "multi:softprob"
+    eval_metric: "mlogloss"
+    use_label_encoder: false
+    random_state: 42
+    n_jobs: 4
+  
+  # Random Forest（对比模型）
+  random_forest:
+    enabled: true
+    n_estimators: 200
+    max_depth: 12
+    min_samples_split: 5
+    min_samples_leaf: 2
+    random_state: 42
+    n_jobs: 4
+  
+  # LightGBM（可选，需安装 lightgbm）
+  lightgbm:
+    enabled: false
+    n_estimators: 200
+    max_depth: 6
+    learning_rate: 0.1
+    subsample: 0.8
+    colsample_bytree: 0.8
+    random_state: 42
+    n_jobs: 4
+
+# ==================== 训练配置 ====================
+training:
+  # 交叉验证折数（split_by_session 为 false 时有效）
+  cv_folds: 5
+  
+  # 是否做 Leave-One-Session-Out (LOSO) 交叉验证
+  loso_cv: false
+  
+  # 类别权重（处理不平衡）
+  class_weights:
+    idle: 1.0
+    walking: 1.0
+    sitting_down: 1.2
+    standing_up: 1.2
+    fall: 3.0
+  
+  # 是否保存特征重要性图
+  plot_feature_importance: true
+  
+  # 是否保存混淆矩阵图
+  plot_confusion_matrix: true
