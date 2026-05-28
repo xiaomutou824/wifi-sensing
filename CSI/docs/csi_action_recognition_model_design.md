@@ -9,16 +9,16 @@
 
 ### 1.1 原始数据规格
 
-| 参数 | 数值 | 说明 |
-|---|---|---|
-| 芯片 | ESP32-S3 | 单天线 |
-| CSI 长度 | 128 bytes | HT-LTF，64 个 I/Q 对 |
-| 带宽 | 20 MHz | `cwb=0`，`secondary_channel=0` |
-| 帧率 | ~87 fps | 固件内自 ping，间隔约 11.5 ms |
-| 子载波数 | 64 | 含 DC 和保护间隔子载波 |
-| 有效子载波 | ~52-56 | 去掉始终为 0 的守卫带 |
-| 节点数 | 4 | 不同空间位置 |
-| 采集标签 | 5 类 | idle / walking / sitting_down / standing_up / fall |
+| 参数       | 数值      | 说明                                               |
+| ---------- | --------- | -------------------------------------------------- |
+| 芯片       | ESP32-S3  | 单天线                                             |
+| CSI 长度   | 128 bytes | HT-LTF，64 个 I/Q 对                               |
+| 带宽       | 20 MHz    | `cwb=0`，`secondary_channel=0`                 |
+| 帧率       | ~87 fps   | 固件内自 ping，间隔约 11.5 ms                      |
+| 子载波数   | 64        | 含 DC 和保护间隔子载波                             |
+| 有效子载波 | ~52-56    | 去掉始终为 0 的守卫带                              |
+| 节点数     | 4         | 不同空间位置                                       |
+| 采集标签   | 5 类      | idle / walking / sitting_down / standing_up / fall |
 
 ### 1.2 关键字段说明
 
@@ -38,6 +38,7 @@ python3 tools/inspect_csi_settings.py data/xxx.csv
 ```
 
 需满足：
+
 - `I/Q pairs parsed = 64` 占比 > 95%
 - `first_word_invalid = 0` 占比 > 95%
 - `Frame interval` 均值在 8-20 ms 之间（帧率 50-120 fps）
@@ -89,20 +90,24 @@ python3 tools/inspect_csi_settings.py data/xxx.csv
 对每个滑动窗口的每个子载波序列提取：
 
 **时域统计（64 维 × 特征数）：**
+
 - 均值（Mean）、标准差（Std）、最大值（Max）、最小值（Min）
 - 极差（Peak-to-Peak）、能量（Energy = Σ|amp|²）
 - 偏度（Skewness）、峰度（Kurtosis）
 - 过零率（Zero Crossing Rate，对差分序列）
 
 **子载波间特征：**
+
 - 相邻子载波相关系数均值
 - 全子载波协方差矩阵的 Frobenius 范数
 
 **时序动态特征：**
+
 - 相邻帧差分的均值、方差（反映变化剧烈程度）
 - 一阶差分能量：Σ|amp[t] - amp[t-1]|²
 
 **RSSI 特征：**
+
 - RSSI 均值、方差、极差（反映整体链路变化）
 
 四节点融合时，将上述特征按 `[node1_feats, node2_feats, node3_feats, node4_feats]` 拼接。
@@ -131,30 +136,30 @@ def segment_action(amp_matrix, rssi, window_size=50, threshold_ratio=3.0):
     """
     # 1. 计算每帧全子载波幅度方差（或差分能量）
     frame_var = np.var(amp_matrix, axis=1)
-    
+  
     # 2. 滑动平均平滑
     smooth_var = np.convolve(frame_var, np.ones(10)/10, mode='same')
-    
+  
     # 3. 取前 1 秒作为基线
     baseline = np.mean(smooth_var[:window_size])
     threshold = baseline * threshold_ratio
-    
+  
     # 4. 检测超过阈值的连续区域
     above = smooth_var > threshold
     # ... 找连续 True 段，过滤过短片段
-    
+  
     return segments
 ```
 
 ### 3.3 标注规范
 
-| 动作 | 建议时长 | 每次录制结构 | 窗口标签策略 |
-|---|---|---|---|
-| `idle` | 5-10 s | 全程静止 | 全部标记 idle |
-| `walking` | 3-5 s | 静止→走→静止 | 仅中间走段标记 walking |
-| `sitting_down` | 2-4 s | 站→坐→静止 | 仅坐下过程标记 sitting_down |
-| `standing_up` | 2-4 s | 坐→站→静止 | 仅起立过程标记 standing_up |
-| `fall` | 2-4 s | 站→倒→躺 | 仅跌倒过程标记 fall |
+| 动作             | 建议时长 | 每次录制结构   | 窗口标签策略                |
+| ---------------- | -------- | -------------- | --------------------------- |
+| `idle`         | 5-10 s   | 全程静止       | 全部标记 idle               |
+| `walking`      | 3-5 s    | 静止→走→静止 | 仅中间走段标记 walking      |
+| `sitting_down` | 2-4 s    | 站→坐→静止   | 仅坐下过程标记 sitting_down |
+| `standing_up`  | 2-4 s    | 坐→站→静止   | 仅起立过程标记 standing_up  |
+| `fall`         | 2-4 s    | 站→倒→躺     | 仅跌倒过程标记 fall         |
 
 **建议：** 训练时只用切分后的核心动作窗口；`idle` 可以用完整片段。
 
@@ -186,6 +191,7 @@ model = xgb.XGBClassifier(
 ```
 
 **优缺点：**
+
 - ✅ 训练秒级完成，不需要 GPU
 - ✅ 小数据量（每类 50+ 样本）即可 work
 - ✅ 可输出特征重要性，帮助分析哪些子载波/节点最敏感
@@ -252,7 +258,7 @@ import torch.nn as nn
 class CNN_BiLSTM(nn.Module):
     def __init__(self, n_subcarriers=64, n_classes=5, time_steps=128):
         super().__init__()
-        
+      
         # 1D-CNN: 沿子载波维度卷积，提取局部频域模式
         self.cnn = nn.Sequential(
             nn.Conv1d(n_subcarriers, 32, kernel_size=5, padding=2),
@@ -262,25 +268,25 @@ class CNN_BiLSTM(nn.Module):
             nn.BatchNorm1d(32),
             nn.ReLU(),
             nn.MaxPool1d(2),  # 128 -> 64
-            
+          
             nn.Conv1d(32, 64, kernel_size=3, padding=1),
             nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.MaxPool1d(2),  # 64 -> 32
-            
+          
             nn.Conv1d(64, 128, kernel_size=3, padding=1),
             nn.BatchNorm1d(128),
             nn.ReLU(),
             nn.MaxPool1d(2),  # 32 -> 16
         )
-        
+      
         # BiLSTM: 沿时间维度建模
         self.lstm = nn.LSTM(
             input_size=128, hidden_size=64,
             num_layers=2, batch_first=True,
             bidirectional=True, dropout=0.3
         )
-        
+      
         # 分类头
         self.classifier = nn.Sequential(
             nn.Dropout(0.5),
@@ -289,7 +295,7 @@ class CNN_BiLSTM(nn.Module):
             nn.Dropout(0.3),
             nn.Linear(64, n_classes)
         )
-    
+  
     def forward(self, x):
         # x: [N, T, C] = [N, 128, 64]
         x = x.permute(0, 2, 1)   # [N, 64, 128] for Conv1d
@@ -301,6 +307,7 @@ class CNN_BiLSTM(nn.Module):
 ```
 
 **优缺点：**
+
 - ✅ 同时捕捉子载波局部模式（CNN）和动作时间演变（LSTM）
 - ✅ 在 CSI 动作识别论文中验证有效
 - ✅ 对 sit/stand 等相似动作区分力强
@@ -338,6 +345,7 @@ Input: [N, 1, 128, 64]
 ```
 
 **优缺点：**
+
 - ✅ 概念直观，类似处理语谱图
 - ✅ 可尝试预训练骨干（如 EfficientNet 微调到 128×64 分辨率）
 - ❌ 对小型数据集容易过拟合
@@ -352,6 +360,7 @@ Input: [N, 1, 128, 64]
 **定位：** 用纯卷积替代 RNN，解决 LSTM 训练慢、难并行的问题。
 
 **核心思想：**
+
 - 因果卷积（Causal Convolution）：确保预测第 t 帧只用 0~t 信息
 - 空洞卷积（Dilated Convolution）：指数级扩大感受野
 - 残差连接：缓解梯度问题
@@ -371,18 +380,18 @@ class TemporalBlock(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.conv2 = nn.Conv1d(out_ch, out_ch, kernel, padding=pad, dilation=dilation)
         self.bn2 = nn.BatchNorm1d(out_ch)
-        
+      
         self.downsample = nn.Conv1d(in_ch, out_ch, 1) if in_ch != out_ch else None
-    
+  
     def forward(self, x):
         out = self.relu(self.bn1(self.conv1(x)))
         out = self.dropout(out)
         out = self.relu(self.bn2(self.conv2(out)))
         out = self.dropout(out)
-        
+      
         # 因果：截断末尾 pad 长度
         out = out[:, :, :x.size(2)]
-        
+      
         residual = x if self.downsample is None else self.downsample(x)
         return self.relu(out + residual)
 
@@ -392,16 +401,16 @@ class TCN(nn.Module):
         layers = []
         dilations = [1, 2, 4, 8]
         channels = [64, 64, 128, 128]
-        
+      
         in_ch = n_subcarriers
         for out_ch, dil in zip(channels, dilations):
             layers.append(TemporalBlock(in_ch, out_ch, dilation=dil))
             in_ch = out_ch
-        
+      
         self.tcn = nn.Sequential(*layers)
         self.gap = nn.AdaptiveAvgPool1d(1)
         self.fc = nn.Linear(channels[-1], n_classes)
-    
+  
     def forward(self, x):
         # x: [N, T, C] -> [N, C, T]
         x = x.permute(0, 2, 1)
@@ -411,6 +420,7 @@ class TCN(nn.Module):
 ```
 
 **优缺点：**
+
 - ✅ 训练速度快（卷积可完全并行）
 - ✅ 感受野随层数指数增长，适合长序列
 - ✅ 无梯度消失问题
@@ -425,6 +435,7 @@ class TCN(nn.Module):
 **定位：** 最终要在 ESP32-S3 上实时推理，或每个节点只发少量特征到 PC。
 
 **策略：**
+
 1. **节点端：** 每个 ESP32-S3 本地维护一个 128 帧滑动窗口，提取轻量特征（均值、方差、差分能量、子载波相关系数），约 20-30 维
 2. **传输：** 通过 UDP 每秒发送 1-5 次特征向量到 PC/树莓派
 3. **推理端：** PC 上运行一个小型 MLP（2-3 层，共几千参数）做四节点融合分类
@@ -443,18 +454,20 @@ class TinyMLP(nn.Module):
             nn.ReLU(),
             nn.Linear(32, n_classes)
         )
-    
+  
     def forward(self, x):
         return self.net(x)
 ```
 
 **若要在 ESP32-S3 本地直接推理：**
+
 - 使用 `esp-tflite-micro` 或 `esp-nn` 加速库
 - 将 PyTorch 模型转为 TFLite Micro 格式
 - 输入：当前窗口的 64 维均值 + 64 维方差 = 128 维
 - 模型大小需控制在 < 50 KB
 
 **优缺点：**
+
 - ✅ 无线缆束缚，四节点可电池供电
 - ✅ 延迟低（本地推理 < 50 ms）
 - ❌ 准确率通常比深度学习方案低 5-10%
@@ -536,12 +549,12 @@ CSI 数据采集成本高，增强对提升泛化非常关键。
 
 ### 6.1 时间域增强
 
-| 方法 | 操作 | 强度 |
-|---|---|---|
-| 时间偏移 | 窗口起始点随机偏移 ±10 帧 | 必用 |
+| 方法     | 操作                                  | 强度 |
+| -------- | ------------------------------------- | ---- |
+| 时间偏移 | 窗口起始点随机偏移 ±10 帧            | 必用 |
 | 时间拉伸 | 线性插值将窗口缩放到 0.8x ~ 1.2x 长度 | 推荐 |
-| 随机裁剪 | 从长片段中随机取不同子窗口 | 必用 |
-| Mixup | 两个窗口按 λ 混合，标签也混合 | 推荐 |
+| 随机裁剪 | 从长片段中随机取不同子窗口            | 必用 |
+| Mixup    | 两个窗口按 λ 混合，标签也混合        | 推荐 |
 
 ```python
 # Mixup 示例
@@ -554,19 +567,19 @@ def mixup(x1, x2, y1, y2, alpha=0.4):
 
 ### 6.2 幅度域增强
 
-| 方法 | 操作 | 适用场景 |
-|---|---|---|
-| 高斯噪声 | `amp += N(0, 0.01 * std)` | 通用 |
-| 幅度缩放 | `amp *= uniform(0.9, 1.1)` | 模拟不同距离 |
-| 子载波 Mask | 随机将 5-10% 子载波置 0 | 模拟子载波丢失 |
-| 时间步 Mask | 随机将 5% 时间步置 0 | 模拟丢包 |
+| 方法        | 操作                         | 适用场景       |
+| ----------- | ---------------------------- | -------------- |
+| 高斯噪声    | `amp += N(0, 0.01 * std)`  | 通用           |
+| 幅度缩放    | `amp *= uniform(0.9, 1.1)` | 模拟不同距离   |
+| 子载波 Mask | 随机将 5-10% 子载波置 0      | 模拟子载波丢失 |
+| 时间步 Mask | 随机将 5% 时间步置 0         | 模拟丢包       |
 
 ### 6.3 节点级增强
 
-| 方法 | 操作 |
-|---|---|
-| 节点 dropout | 训练时随机丢弃 1 个节点的输入（置 0） |
-| 节点置换 | 改变四节点的空间顺序（如果位置不对称） |
+| 方法         | 操作                                   |
+| ------------ | -------------------------------------- |
+| 节点 dropout | 训练时随机丢弃 1 个节点的输入（置 0）  |
+| 节点置换     | 改变四节点的空间顺序（如果位置不对称） |
 
 ### 6.4 类别不平衡处理
 
@@ -599,17 +612,17 @@ Session 3 (Day 3):  测试集 20%  ← 完全未见过
 
 ### 7.2 训练配置（以 CNN_BiLSTM 为例）
 
-| 参数 | 设置 |
-|---|---|
-| 优化器 | AdamW |
-| 初始学习率 | 1e-3 |
-| Batch size | 32-64 |
+| 参数       | 设置                                              |
+| ---------- | ------------------------------------------------- |
+| 优化器     | AdamW                                             |
+| 初始学习率 | 1e-3                                              |
+| Batch size | 32-64                                             |
 | 学习率衰减 | CosineAnnealingLR(T_max=100) 或 ReduceLROnPlateau |
-| 权重衰减 | 1e-4 |
-| Dropout | 0.3-0.5 |
-| Epoch | 100-200（EarlyStopping，耐心 15-20） |
-| 损失函数 | CrossEntropyLoss（加权）或 FocalLoss |
-| 评估频率 | 每 epoch 验证一次 |
+| 权重衰减   | 1e-4                                              |
+| Dropout    | 0.3-0.5                                           |
+| Epoch      | 100-200（EarlyStopping，耐心 15-20）              |
+| 损失函数   | CrossEntropyLoss（加权）或 FocalLoss              |
+| 评估频率   | 每 epoch 验证一次                                 |
 
 ### 7.3 Early Stopping 与 Checkpoint
 
@@ -635,17 +648,18 @@ for epoch in range(max_epochs):
 
 ### 8.1 核心指标
 
-| 指标 | 说明 | 目标值 |
-|---|---|---|
-| Accuracy | 整体准确率 | > 90% |
-| Macro-F1 | 每类 F1 的均值（不受类别不平衡影响）| > 88% |
-| `fall` Recall | 跌倒检出率（漏检代价高）| > 95% |
-| `fall` Precision | 跌倒误报率 | > 85% |
-| Inference Time | 单窗口推理耗时（GPU/CPU）| < 10 ms |
+| 指标               | 说明                                 | 目标值  |
+| ------------------ | ------------------------------------ | ------- |
+| Accuracy           | 整体准确率                           | > 90%   |
+| Macro-F1           | 每类 F1 的均值（不受类别不平衡影响） | > 88%   |
+| `fall` Recall    | 跌倒检出率（漏检代价高）             | > 95%   |
+| `fall` Precision | 跌倒误报率                           | > 85%   |
+| Inference Time     | 单窗口推理耗时（GPU/CPU）            | < 10 ms |
 
 ### 8.2 混淆矩阵分析
 
 重点关注：
+
 - `sitting_down` vs `standing_up`：两者易混淆，需看是否可通过时序特征区分
 - `walking` vs `idle`：通常区分度最高
 - `fall` vs 其他：fall 的特征通常是短时剧烈变化，如果模型把 fall 判为 walking，说明窗口太长或缺乏动态特征
@@ -769,29 +783,30 @@ augment:
 
 ## 11. 参考论文与开源实现
 
-| 论文/项目 | 核心方法 | 可借鉴点 |
-|---|---|---|
-| WiFi-based human activity recognition using CNR | CNN + LSTM | 网络结构可直接复用 |
-| Widar3.0 | CSI 商业级系统 | 速度估计 + 多节点融合策略 |
-| ESPectre (francescopace/espectre) | MVS + NBVI + Hampel | 子载波选择、滤波器设计 |
-| esp-csi (espressif/esp-csi) | esp_radar 组件 | 增益控制、ping 触发、 null data |
-| DeepSeg: Deep Learning for WiFi-based Human Activity Segmentation | 端到端切分 + 分类 | 动作边界检测 |
+| 论文/项目                                                         | 核心方法            | 可借鉴点                        |
+| ----------------------------------------------------------------- | ------------------- | ------------------------------- |
+| WiFi-based human activity recognition using CNR                   | CNN + LSTM          | 网络结构可直接复用              |
+| Widar3.0                                                          | CSI 商业级系统      | 速度估计 + 多节点融合策略       |
+| ESPectre (francescopace/espectre)                                 | MVS + NBVI + Hampel | 子载波选择、滤波器设计          |
+| esp-csi (espressif/esp-csi)                                       | esp_radar 组件      | 增益控制、ping 触发、 null data |
+| DeepSeg: Deep Learning for WiFi-based Human Activity Segmentation | 端到端切分 + 分类   | 动作边界检测                    |
 
 ---
 
 ## 12. 风险与应对
 
-| 风险 | 影响 | 应对 |
-|---|---|---|
-| `sit` / `stand` 混淆 | 模型区分困难 | 增加窗口长度（>2s），让 LSTM 捕捉完整动作过程；或加入方向性特征（坐下时幅度递减，起立时递增） |
-| 跨 session 性能下降 | 时间/位置变化导致分布偏移 | 多 session 采集；训练时加入幅度缩放增强；使用 Domain Adaptation（如 DANN） |
-| fall 样本少 | 检出率低 | 过采样 + Focal Loss + 更高的类别权重；采集时故意多采 fall |
-| 四节点时间不同步 | 融合效果差 | 用 `pc_time_iso` 做最近邻对齐；或改用 Late Fusion |
-| 实时推理延迟高 | 系统卡顿 | 降低窗口长度；用 TCN 替代 LSTM；或节点端提取特征，只传特征向量 |
+| 风险                     | 影响                      | 应对                                                                                          |
+| ------------------------ | ------------------------- | --------------------------------------------------------------------------------------------- |
+| `sit` / `stand` 混淆 | 模型区分困难              | 增加窗口长度（>2s），让 LSTM 捕捉完整动作过程；或加入方向性特征（坐下时幅度递减，起立时递增） |
+| 跨 session 性能下降      | 时间/位置变化导致分布偏移 | 多 session 采集；训练时加入幅度缩放增强；使用 Domain Adaptation（如 DANN）                    |
+| fall 样本少              | 检出率低                  | 过采样 + Focal Loss + 更高的类别权重；采集时故意多采 fall                                     |
+| 四节点时间不同步         | 融合效果差                | 用 `pc_time_iso` 做最近邻对齐；或改用 Late Fusion                                           |
+| 实时推理延迟高           | 系统卡顿                  | 降低窗口长度；用 TCN 替代 LSTM；或节点端提取特征，只传特征向量                                |
 
 ---
 
 > **最终建议：**
+>
 > 1. 先用 **XGBoost + 手工特征 + 四节点 Early Fusion** 在 2 天内跑通 Baseline，验证数据质量。
 > 2. 确认数据可用后，主攻 **CNN_BiLSTM（方案 B）**，这是性价比最高的方案。
 > 3. 如果时间充裕，对比 **TCN（方案 D）**，训练更快且效果接近。

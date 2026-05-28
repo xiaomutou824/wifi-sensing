@@ -59,7 +59,7 @@ Ctrl + ]
 
 ```bash
 cd /home/xing/project/wifi-sensing/CSI_collection_AP_STA
-python3 tools/save_serial_csi.py --port /dev/ttyUSB1 --baud 921600 --label idle --node 1
+python3 tools/save_serial_csi.py --port /dev/ttyUSB0 --baud 921600 --label idle --node 1
 ```
 
 AP 端不输出 CSI，保存数据只保存 STA 端。

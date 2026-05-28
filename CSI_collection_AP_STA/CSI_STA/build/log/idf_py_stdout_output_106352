@@ -1,9 +1,9 @@
 Command: ninja flash
 [1/5] cd /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA/build/esp-idf/esptool_py && /home/xing/.espressif/python_env/idf5.5_py3.10_env/bin/python /home/xing/.espressif/v5.5.4/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA/build/partition_table/partition-table.bin /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA/build/csi_sta.bin
-csi_sta.bin binary size 0xb98d0 bytes. Smallest app partition is 0x100000 bytes. 0x46730 bytes (28%) free.
+csi_sta.bin binary size 0xb99a0 bytes. Smallest app partition is 0x100000 bytes. 0x46660 bytes (27%) free.
 [2/5] Performing build step for 'bootloader'
 [1/1] cd /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA/build/bootloader/esp-idf/esptool_py && /home/xing/.espressif/python_env/idf5.5_py3.10_env/bin/python /home/xing/.espressif/v5.5.4/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x0 /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA/build/bootloader/bootloader.bin
-Bootloader binary size 0x5160 bytes. 0x2ea0 bytes (36%) free.
+Bootloader binary size 0x5170 bytes. 0x2e90 bytes (36%) free.
 [3/5] No install step for 'bootloader'
 [4/5] Completed 'bootloader'
 [4/5] cd /home/xing/.espressif/v5.5.4/esp-idf/components/esptool_py && /home/xing/.espressif/tools/cmake/3.30.2/bin/cmake -D IDF_PATH=/home/xing/.espressif/v5.5.4/esp-idf -D "SERIAL_TOOL=/home/xing/.espressif/python_env/idf5.5_py3.10_env/bin/python;;/home/xing/.espressif/v5.5.4/esp-idf/components/esptool_py/esptool/esptool.py;--chip;esp32s3" -D "SERIAL_TOOL_ARGS=--before=default_reset;--after=hard_reset;write_flash;@flash_args" -D WORKING_DIRECTORY=/home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA/build -P /home/xing/.espressif/v5.5.4/esp-idf/components/esptool_py/run_serial_tool.cmake
@@ -25,46 +25,46 @@ Flash will be erased from 0x00000000 to 0x00005fff...
 Flash will be erased from 0x00010000 to 0x000c9fff...
 Flash will be erased from 0x00008000 to 0x00008fff...
 SHA digest in image updated
-Compressed 20832 bytes to 13348...
+Compressed 20848 bytes to 13352...
 Writing at 0x00000000... (100 %)
-Wrote 20832 bytes (13348 compressed) at 0x00000000 in 0.5 seconds (effective 314.7 kbit/s)...
+Wrote 20848 bytes (13352 compressed) at 0x00000000 in 0.5 seconds (effective 305.4 kbit/s)...
 Hash of data verified.
-Compressed 760016 bytes to 477094...
+Compressed 760224 bytes to 477249...
 Writing at 0x00010000... (3 %)
-Writing at 0x0001c92f... (6 %)
-Writing at 0x0002583c... (10 %)
-Writing at 0x00030ccf... (13 %)
-Writing at 0x0003719b... (16 %)
-Writing at 0x0003d587... (20 %)
-Writing at 0x000433dd... (23 %)
-Writing at 0x00049192... (26 %)
-Writing at 0x0004eade... (30 %)
-Writing at 0x00054783... (33 %)
-Writing at 0x0005a451... (36 %)
-Writing at 0x00060324... (40 %)
-Writing at 0x00065f6d... (43 %)
-Writing at 0x0006b11d... (46 %)
-Writing at 0x00070523... (50 %)
-Writing at 0x00075f03... (53 %)
-Writing at 0x0007b4d9... (56 %)
-Writing at 0x00080805... (60 %)
-Writing at 0x00085e44... (63 %)
-Writing at 0x0008bbdb... (66 %)
-Writing at 0x00091476... (70 %)
-Writing at 0x000971c2... (73 %)
-Writing at 0x0009cbb1... (76 %)
-Writing at 0x000a238b... (80 %)
-Writing at 0x000aae6a... (83 %)
-Writing at 0x000b0c88... (86 %)
-Writing at 0x000b6dbf... (90 %)
-Writing at 0x000bcf8d... (93 %)
-Writing at 0x000c31e0... (96 %)
-Writing at 0x000c8aa1... (100 %)
-Wrote 760016 bytes (477094 compressed) at 0x00010000 in 10.9 seconds (effective 556.7 kbit/s)...
+Writing at 0x0001c8e4... (6 %)
+Writing at 0x0002580b... (10 %)
+Writing at 0x00030c9c... (13 %)
+Writing at 0x00037153... (16 %)
+Writing at 0x0003d58b... (20 %)
+Writing at 0x000433c5... (23 %)
+Writing at 0x00049143... (26 %)
+Writing at 0x0004eaea... (30 %)
+Writing at 0x00054780... (33 %)
+Writing at 0x0005a43c... (36 %)
+Writing at 0x00060312... (40 %)
+Writing at 0x00065f44... (43 %)
+Writing at 0x0006b137... (46 %)
+Writing at 0x000704fb... (50 %)
+Writing at 0x00075ef6... (53 %)
+Writing at 0x0007b4f5... (56 %)
+Writing at 0x00080810... (60 %)
+Writing at 0x00085e47... (63 %)
+Writing at 0x0008bc0e... (66 %)
+Writing at 0x00091443... (70 %)
+Writing at 0x000971a6... (73 %)
+Writing at 0x0009cbf5... (76 %)
+Writing at 0x000a23ca... (80 %)
+Writing at 0x000aae54... (83 %)
+Writing at 0x000b0c83... (86 %)
+Writing at 0x000b6d92... (90 %)
+Writing at 0x000bcf3a... (93 %)
+Writing at 0x000c320e... (96 %)
+Writing at 0x000c894a... (100 %)
+Wrote 760224 bytes (477249 compressed) at 0x00010000 in 10.9 seconds (effective 556.3 kbit/s)...
 Hash of data verified.
 Compressed 3072 bytes to 103...
 Writing at 0x00008000... (100 %)
-Wrote 3072 bytes (103 compressed) at 0x00008000 in 0.0 seconds (effective 556.1 kbit/s)...
+Wrote 3072 bytes (103 compressed) at 0x00008000 in 0.0 seconds (effective 593.0 kbit/s)...
 Hash of data verified.
 
 Leaving...

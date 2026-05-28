@@ -1,7 +1,7 @@
 {
     "version":            "1.2",
     "project_name":       "csi_sta",
-    "project_version":    "1",
+    "project_version":    "20cc9d4-dirty",
     "project_path":       "/home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA",
     "idf_path":           "/home/xing/.espressif/v5.5.4/esp-idf",
     "build_dir":          "/home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA/build",
@@ -17,7 +17,7 @@
     "min_rev":            "0",
     "max_rev":            "99",
     "phy_data_partition": "",
-    "monitor_baud" :      "115200",
+    "monitor_baud" :      "460800",
     "monitor_toolprefix": "xtensa-esp32s3-elf-",
     "c_compiler":         "/home/xing/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20260121/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc",
     "config_environment" : {

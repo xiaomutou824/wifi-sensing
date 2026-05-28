@@ -1,0 +1,70 @@
+Command: ninja flash
+[1/5] cd /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/esptool_py && /home/xing/.espressif/python_env/idf5.5_py3.10_env/bin/python /home/xing/.espressif/v5.5.4/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/partition_table/partition-table.bin /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/csi_ap.bin
+csi_ap.bin binary size 0xb5d20 bytes. Smallest app partition is 0x100000 bytes. 0x4a2e0 bytes (29%) free.
+[2/5] Performing build step for 'bootloader'
+[1/1] cd /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/bootloader/esp-idf/esptool_py && /home/xing/.espressif/python_env/idf5.5_py3.10_env/bin/python /home/xing/.espressif/v5.5.4/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x0 /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/bootloader/bootloader.bin
+Bootloader binary size 0x5170 bytes. 0x2e90 bytes (36%) free.
+[3/5] No install step for 'bootloader'
+[4/5] Completed 'bootloader'
+[4/5] cd /home/xing/.espressif/v5.5.4/esp-idf/components/esptool_py && /home/xing/.espressif/tools/cmake/3.30.2/bin/cmake -D IDF_PATH=/home/xing/.espressif/v5.5.4/esp-idf -D "SERIAL_TOOL=/home/xing/.espressif/python_env/idf5.5_py3.10_env/bin/python;;/home/xing/.espressif/v5.5.4/esp-idf/components/esptool_py/esptool/esptool.py;--chip;esp32s3" -D "SERIAL_TOOL_ARGS=--before=default_reset;--after=hard_reset;write_flash;@flash_args" -D WORKING_DIRECTORY=/home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build -P /home/xing/.espressif/v5.5.4/esp-idf/components/esptool_py/run_serial_tool.cmake
+esptool.py --chip esp32s3 -p /dev/ttyUSB0 -b 460800 --before=default_reset --after=hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size 2MB 0x0 bootloader/bootloader.bin 0x10000 csi_ap.bin 0x8000 partition_table/partition-table.bin
+esptool.py v4.12.dev2
+Serial port /dev/ttyUSB0
+Connecting....
+Chip is ESP32-S3 (QFN56) (revision v0.2)
+Features: WiFi, BLE, Embedded PSRAM 8MB (AP_3v3)
+Crystal is 40MHz
+MAC: e0:72:a1:d2:9a:d8
+Uploading stub...
+Running stub...
+Stub running...
+Changing baud rate to 460800
+Changed.
+Configuring flash size...
+Flash will be erased from 0x00000000 to 0x00005fff...
+Flash will be erased from 0x00010000 to 0x000c5fff...
+Flash will be erased from 0x00008000 to 0x00008fff...
+SHA digest in image updated
+Compressed 20848 bytes to 13351...
+Writing at 0x00000000... (100 %)
+Wrote 20848 bytes (13351 compressed) at 0x00000000 in 0.5 seconds (effective 346.6 kbit/s)...
+Hash of data verified.
+Compressed 744736 bytes to 467766...
+Writing at 0x00010000... (3 %)
+Writing at 0x0001c68c... (6 %)
+Writing at 0x0002515a... (10 %)
+Writing at 0x0003053d... (13 %)
+Writing at 0x0003691c... (17 %)
+Writing at 0x0003cd8b... (20 %)
+Writing at 0x00042d34... (24 %)
+Writing at 0x00048d5c... (27 %)
+Writing at 0x0004ecdb... (31 %)
+Writing at 0x00053f91... (34 %)
+Writing at 0x00058f8c... (37 %)
+Writing at 0x0005e8a9... (41 %)
+Writing at 0x00064019... (44 %)
+Writing at 0x0006953b... (48 %)
+Writing at 0x0006ea59... (51 %)
+Writing at 0x00074559... (55 %)
+Writing at 0x0007a038... (58 %)
+Writing at 0x0007faa3... (62 %)
+Writing at 0x00085854... (65 %)
+Writing at 0x0008b2ec... (68 %)
+Writing at 0x00090ddc... (72 %)
+Writing at 0x00096b20... (75 %)
+Writing at 0x0009c456... (79 %)
+Writing at 0x000a1c93... (82 %)
+Writing at 0x000aab71... (86 %)
+Writing at 0x000b0a2b... (89 %)
+Writing at 0x000b6c04... (93 %)
+Writing at 0x000bd3d5... (96 %)
+Writing at 0x000c2434... (100 %)
+Wrote 744736 bytes (467766 compressed) at 0x00010000 in 10.5 seconds (effective 565.4 kbit/s)...
+Hash of data verified.
+Compressed 3072 bytes to 103...
+Writing at 0x00008000... (100 %)
+Wrote 3072 bytes (103 compressed) at 0x00008000 in 0.0 seconds (effective 731.6 kbit/s)...
+Hash of data verified.
+
+Leaving...
+Hard resetting via RTS pin...

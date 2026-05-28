@@ -12,6 +12,7 @@
  */
 
 #include <inttypes.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -33,6 +34,7 @@
 #define WIFI_MAXIMUM_RETRY 10
 #define MAC_STR "%02x:%02x:%02x:%02x:%02x:%02x"
 #define MAC_ARG(mac) (mac)[0], (mac)[1], (mac)[2], (mac)[3], (mac)[4], (mac)[5]
+#define CSI_LINE_BUFFER_SIZE 2048
 
 static const char *TAG = "csi_sta";
 static EventGroupHandle_t wifi_event_group;
@@ -57,6 +59,22 @@ static volatile uint32_t ping_success_count;
 static volatile uint32_t ping_timeout_count;
 static uint16_t last_rx_seq;
 static bool last_rx_seq_valid;
+
+static int append_text(char *buf, size_t buf_size, int offset,
+                       const char *fmt, ...) {
+  if (offset < 0 || (size_t)offset >= buf_size) {
+    return -1;
+  }
+
+  va_list args;
+  va_start(args, fmt);
+  const int written = vsnprintf(buf + offset, buf_size - (size_t)offset, fmt, args);
+  va_end(args);
+  if (written < 0 || (size_t)written >= buf_size - (size_t)offset) {
+    return -1;
+  }
+  return offset + written;
+}
 
 static void init_nvs(void) {
   esp_err_t ret = nvs_flash_init();
@@ -222,22 +240,30 @@ static void csi_rx_callback(void *ctx, wifi_csi_info_t *info) {
   last_rx_seq_valid = true;
   csi_printed_count++;
 
-  printf("CSI_DATA,%d,%" PRIu32 ",%" PRId64 ",%" PRIu32 "," MAC_STR ","
-         MAC_STR ",%u,%u,%u,%d,%u,%u,%u,%u,%u,%u,%u,%u,%d,%u,%u,%u,%u",
-         CONFIG_CSI_NODE_ID, seq, now_us, (uint32_t)rx->timestamp,
-         MAC_ARG(info->mac), MAC_ARG(info->dmac),
-         info->first_word_invalid ? 1 : 0, info->rx_seq, info->payload_len,
-         rx->rssi, rx->channel, rx->secondary_channel, rx->rate, rx->sig_mode,
-         rx->mcs, rx->cwb, rx->stbc, rx->sgi, rx->noise_floor, rx->ant,
-         rx->sig_len, rx->rx_state, info->len);
+  char line[CSI_LINE_BUFFER_SIZE];
+  int offset = append_text(
+      line, sizeof(line), 0,
+      "CSI_DATA,%d,%" PRIu32 ",%" PRId64 ",%" PRIu32 "," MAC_STR ","
+      MAC_STR ",%u,%u,%u,%d,%u,%u,%u,%u,%u,%u,%u,%u,%d,%u,%u,%u,%u",
+      CONFIG_CSI_NODE_ID, seq, now_us, (uint32_t)rx->timestamp,
+      MAC_ARG(info->mac), MAC_ARG(info->dmac),
+      info->first_word_invalid ? 1 : 0, info->rx_seq, info->payload_len,
+      rx->rssi, rx->channel, rx->secondary_channel, rx->rate, rx->sig_mode,
+      rx->mcs, rx->cwb, rx->stbc, rx->sgi, rx->noise_floor, rx->ant,
+      rx->sig_len, rx->rx_state, info->len);
 
 #if CONFIG_CSI_PRINT_RAW_IQ
-  for (int i = 0; i < info->len; i++) {
-    printf(",%d", info->buf[i]);
+  for (int i = 0; i < info->len && offset >= 0; i++) {
+    offset = append_text(line, sizeof(line), offset, ",%d", info->buf[i]);
   }
 #endif
 
-  printf("\n");
+  if (offset >= 0) {
+    offset = append_text(line, sizeof(line), offset, "\n");
+  }
+  if (offset > 0) {
+    fwrite(line, 1, (size_t)offset, stdout);
+  }
 }
 
 static esp_err_t csi_init(void) {
