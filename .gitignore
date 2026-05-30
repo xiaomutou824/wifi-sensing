@@ -1,0 +1,32 @@
+# Python cache and local environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Jupyter / editor / OS noise
+.ipynb_checkpoints/
+.DS_Store
+Thumbs.db
+
+# Large datasets and generated data
+datasets/ESP-Fi-HAR/
+*.rar
+*.npz
+*.mat
+
+# Model artifacts and generated outputs
+*.pkl
+*.joblib
+*.pt
+*.pth
+*.onnx
+Baseline/output/
+SchemeB_CNN_BiLSTM/output/
+
+# Logs and temporary files
+*.log
+tmp/
+temp/

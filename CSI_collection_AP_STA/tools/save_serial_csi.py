@@ -28,6 +28,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--label", default="unlabeled", help="Activity label")
     parser.add_argument("--node", default=None, help="Optional expected node id")
     parser.add_argument("--out-dir", default="data", help="Output directory")
+    parser.add_argument(
+        "--max-rows",
+        type=int,
+        default=1000,
+        help="Stop automatically after saving this many CSI rows. Use 0 to run until Ctrl+C.",
+    )
     return parser.parse_args()
 
 
@@ -42,7 +48,10 @@ def main() -> int:
 
     print(f"Opening {args.port} at {args.baud} baud")
     print(f"Saving CSI rows to {out_path}")
-    print("Press Ctrl+C to stop.")
+    if args.max_rows > 0:
+        print(f"Will stop automatically after {args.max_rows} CSI rows.")
+    else:
+        print("Press Ctrl+C to stop.")
 
     with serial.Serial(args.port, args.baud, timeout=1) as ser, out_path.open(
         "w", newline="", encoding="utf-8"
@@ -85,6 +94,13 @@ def main() -> int:
             if rows % 100 == 0:
                 f.flush()
                 print(f"saved {rows} CSI rows")
+
+            if args.max_rows > 0 and rows >= args.max_rows:
+                f.flush()
+                print(f"Reached {args.max_rows} CSI rows. Saved to {out_path}")
+                break
+
+    return 0
 
 
 if __name__ == "__main__":

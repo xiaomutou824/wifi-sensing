@@ -1,0 +1,41 @@
+data:
+  train_npz: "../datasets/ESP-Fi-HAR/processed_cnn_bilstm/train_windows.npz"
+  val_npz: "../datasets/ESP-Fi-HAR/processed_cnn_bilstm/val_windows.npz"
+  test_npz: "../datasets/ESP-Fi-HAR/processed_cnn_bilstm/test_windows.npz"
+  output_dir: "./output_espfi_har"
+  labels: ["run", "fall", "walk", "turn", "jump", "squat", "arm_wave"]
+
+train:
+  epochs: 80
+  batch_size: 64
+  num_workers: 0
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  patience: 15
+  seed: 42
+  device: "auto"
+  use_amp: true
+
+model:
+  cnn_channels: [32, 64, 128]
+  lstm_hidden: 64
+  lstm_layers: 2
+  lstm_dropout: 0.3
+  classifier_dropout: 0.5
+  use_attention: true
+  attention_heads: 4
+
+augment:
+  enabled: true
+  time_shift: true
+  time_shift_range: 12
+  time_stretch: true
+  time_stretch_range: [0.9, 1.1]
+  gaussian_noise: 0.01
+  amplitude_scale: 0.08
+  subcarrier_mask_ratio: 0.05
+  timestep_mask_ratio: 0.05
+  mixup: false
+  mixup_alpha: 0.4
+  oversample: false
+  class_weights: {}

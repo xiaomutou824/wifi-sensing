@@ -68,8 +68,8 @@ def detect_segments(
     if n < baseline_window + min_segment_len:
         return []
 
-    # 用前 baseline_window 帧的均值作为基线
-    baseline = np.mean(metric[:baseline_window])
+    # 用前 baseline_window 帧的均值作为基线，保留微小下限避免静止段全 0 时阈值失效。
+    baseline = max(float(np.mean(metric[:baseline_window])), 1e-8)
     threshold = baseline * threshold_ratio
 
     # 二值化：超过阈值视为动作
@@ -129,9 +129,11 @@ def segment_action(
 
     metric = smooth_signal(metric, window_size=kwargs.get("smooth_window", 10))
 
+    baseline_window = kwargs.get("baseline_window", kwargs.get("window_size", 50))
+
     segments = detect_segments(
         metric,
-        baseline_window=kwargs.get("baseline_window", 50),
+        baseline_window=baseline_window,
         threshold_ratio=kwargs.get("threshold_ratio", 3.0),
         min_segment_len=kwargs.get("min_segment_len", 30),
         padding=kwargs.get("padding", 15),

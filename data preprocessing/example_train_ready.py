@@ -2,7 +2,7 @@
 
 演示如何：
     1. 加载多个 CSV 文件
-    2. 按 session（日期）划分训练/验证/测试集
+    2. 按 label 分层 / session / 文件划分训练、验证、测试集
     3. 预处理（过滤、转幅度、归一化、滑动窗口）
     4. 创建 PyTorch Dataset 和 DataLoader
     5. 保存为 .npz 供后续训练直接使用
@@ -15,11 +15,8 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-import numpy as np
 import yaml
-from torch.utils.data import DataLoader
 
-from dataset import CSIDataset, build_weighted_sampler, collate_fn_2d, collate_fn_tcn, create_datasets
 from preprocess import preprocess_pipeline, save_processed
 
 
@@ -40,6 +37,19 @@ def group_files_by_session(csv_files: list[str]) -> dict[str, list[str]]:
     return dict(sessions)
 
 
+def infer_label_from_filename(csv_file: str) -> str:
+    """从 node1_<label>_YYYYMMDD_HHMMSS.csv 形式的文件名中提取 label."""
+    stem = Path(csv_file).stem
+    m = re.match(r"node\d+_(.+)_\d{8}_\d{6}$", stem)
+    if m:
+        return m.group(1)
+
+    # Fallback: remove timestamp suffix and optional node prefix.
+    stem = re.sub(r"_\d{8}_\d{6}$", "", stem)
+    stem = re.sub(r"^node\d+_", "", stem)
+    return stem or "unknown"
+
+
 def split_by_session(
     sessions: dict[str, list[str]],
     ratios: dict[str, float],
@@ -52,8 +62,15 @@ def split_by_session(
     sorted_dates = sorted(sessions.keys())
     n = len(sorted_dates)
 
-    train_cutoff = int(n * ratios["train"])
+    if n == 1:
+        return list(sessions[sorted_dates[0]]), [], []
+
+    train_cutoff = max(1, int(n * ratios["train"]))
     val_cutoff = int(n * (ratios["train"] + ratios["val"]))
+    val_cutoff = max(train_cutoff, val_cutoff)
+
+    if n >= 3 and val_cutoff == train_cutoff:
+        val_cutoff = train_cutoff + 1
 
     train_dates = sorted_dates[:train_cutoff]
     val_dates = sorted_dates[train_cutoff:val_cutoff]
@@ -74,6 +91,97 @@ def split_by_session(
     return train_files, val_files, test_files
 
 
+def split_by_file_ratio(
+    csv_files: list[str],
+    ratios: dict[str, float],
+) -> tuple[list[str], list[str], list[str]]:
+    """按文件划分，保证同一个文件只出现在一个 split。"""
+    n = len(csv_files)
+    if n == 0:
+        return [], [], []
+    if n == 1:
+        return csv_files, [], []
+
+    train_cutoff = max(1, int(n * ratios["train"]))
+    val_cutoff = int(n * (ratios["train"] + ratios["val"]))
+    if n >= 3 and val_cutoff == train_cutoff:
+        val_cutoff = train_cutoff + 1
+
+    return csv_files[:train_cutoff], csv_files[train_cutoff:val_cutoff], csv_files[val_cutoff:]
+
+
+def split_by_label_stratified(
+    csv_files: list[str],
+    ratios: dict[str, float],
+) -> tuple[list[str], list[str], list[str]]:
+    """按文件名里的动作 label 分层划分.
+
+    每个类别内部先按文件名排序，再按比例切 train/val/test，最后合并。
+    这样可以尽量保证每个 split 都包含各个动作类别。
+    """
+    by_label: dict[str, list[str]] = defaultdict(list)
+    for f in sorted(csv_files):
+        by_label[infer_label_from_filename(f)].append(f)
+
+    train_files: list[str] = []
+    val_files: list[str] = []
+    test_files: list[str] = []
+
+    print("Label-stratified split:")
+    for label, files in sorted(by_label.items()):
+        n = len(files)
+        if n == 1:
+            label_train, label_val, label_test = files, [], []
+        elif n == 2:
+            label_train, label_val, label_test = files[:1], files[1:], []
+        else:
+            train_cutoff = max(1, int(n * ratios["train"]))
+            val_count = max(1, int(n * ratios["val"]))
+            if train_cutoff + val_count >= n:
+                train_cutoff = max(1, n - 2)
+                val_count = 1
+            val_cutoff = train_cutoff + val_count
+            label_train = files[:train_cutoff]
+            label_val = files[train_cutoff:val_cutoff]
+            label_test = files[val_cutoff:]
+
+        train_files.extend(label_train)
+        val_files.extend(label_val)
+        test_files.extend(label_test)
+        print(
+            f"  {label}: total={n}, "
+            f"train={len(label_train)}, val={len(label_val)}, test={len(label_test)}"
+        )
+
+    return sorted(train_files), sorted(val_files), sorted(test_files)
+
+
+def split_files(
+    csv_files: list[str],
+    config: dict,
+) -> tuple[list[str], list[str], list[str]]:
+    """按配置划分 CSV 文件，兼容旧的 split_by_session 配置."""
+    ratios = config["data"]["split_ratio"]
+    split_strategy = config["data"].get("split_strategy")
+
+    if split_strategy is None:
+        split_strategy = "session" if config["data"].get("split_by_session", True) else "file"
+
+    if split_strategy == "session":
+        sessions = group_files_by_session(csv_files)
+        print(f"Sessions: {list(sessions.keys())}")
+        return split_by_session(sessions, ratios)
+    if split_strategy == "file":
+        return split_by_file_ratio(csv_files, ratios)
+    if split_strategy == "stratified_label":
+        return split_by_label_stratified(csv_files, ratios)
+
+    raise ValueError(
+        "Unknown split_strategy: "
+        f"{split_strategy!r}. Expected one of: stratified_label, session, file."
+    )
+
+
 def main():
     # 1. 加载配置
     with open("config.yaml", "r", encoding="utf-8") as f:
@@ -84,19 +192,14 @@ def main():
     csv_files = sorted(glob.glob(csv_pattern))
     print(f"Found {len(csv_files)} CSV files")
 
-    if len(csv_files) < 3:
-        print("Warning: Too few files. Using all for training demo.")
-        train_files = csv_files
-        val_files = csv_files[-1:] if len(csv_files) > 1 else []
-        test_files = []
-    else:
-        sessions = group_files_by_session(csv_files)
-        print(f"Sessions: {list(sessions.keys())}")
-        train_files, val_files, test_files = split_by_session(
-            sessions, config["data"]["split_ratio"]
-        )
+    if not csv_files:
+        raise FileNotFoundError(f"No CSV files found for pattern: {csv_pattern}")
+
+    train_files, val_files, test_files = split_files(csv_files, config)
 
     print(f"Train files: {len(train_files)}, Val files: {len(val_files)}, Test files: {len(test_files)}")
+    if not val_files:
+        print("Warning: no validation split. Add more sessions/files for reliable evaluation.")
 
     # 3. 预处理训练集（计算归一化统计量）
     print("\n[1/3] Processing training set...")
@@ -121,6 +224,18 @@ def main():
     if test_data:
         save_processed(output_dir, test_data, split_name="test")
 
+    try:
+        from torch.utils.data import DataLoader
+
+        from augmentation import MixupCollator
+        from dataset import build_weighted_sampler, create_datasets
+    except ModuleNotFoundError as exc:
+        if exc.name != "torch":
+            raise
+        print("\n[4/4] PyTorch is not installed; skipped Dataset/DataLoader demo.")
+        print("Preprocessed .npz files were saved successfully.")
+        return
+
     # 6. 创建 PyTorch Dataset
     print("\n[4/4] Creating PyTorch Datasets...")
     augment_cfg = config.get("augment", None)
@@ -133,13 +248,26 @@ def main():
     num_workers = 0  # Windows/macOS 建议设为 0
 
     # 类别权重采样（处理不平衡）
-    class_weights = config.get("augment", {}).get("class_weights", None)
+    augment_cfg = config.get("augment", {})
+    class_weights = augment_cfg.get("class_weights", None) if augment_cfg.get("oversample", False) else None
     sampler = None
     if class_weights and train_ds is not None:
         # 将字符串权重转为整数索引权重
-        int_weights = {train_ds.label_map.get(k, 0): v for k, v in class_weights.items()}
+        int_weights = {
+            train_ds.label_map[k]: v
+            for k, v in class_weights.items()
+            if k in train_ds.label_map
+        }
         sampler = build_weighted_sampler(train_ds.labels, int_weights)
         print(f"Using weighted sampler with weights: {int_weights}")
+
+    collate_fn = None
+    if augment_cfg.get("enabled", False) and augment_cfg.get("mixup", False):
+        collate_fn = MixupCollator(
+            alpha=augment_cfg.get("mixup_alpha", 0.4),
+            num_classes=len(label_map),
+        )
+        print("Using MixupCollator; train labels are soft one-hot vectors.")
 
     train_loader = DataLoader(
         train_ds,
@@ -147,7 +275,8 @@ def main():
         sampler=sampler,
         shuffle=(sampler is None),
         num_workers=num_workers,
-        drop_last=True,
+        drop_last=(len(train_ds) >= batch_size),
+        collate_fn=collate_fn,
     )
 
     val_loader = None

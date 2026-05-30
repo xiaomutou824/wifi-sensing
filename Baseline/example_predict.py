@@ -14,14 +14,20 @@ _PREPROC_DIR = _SCRIPT_DIR.parent / "data preprocessing"
 sys.path.insert(0, str(_PREPROC_DIR))
 
 from features import extract_all_features
-from preprocess import preprocess_single_file
+from preprocess import preprocess_pipeline
 
 
-def load_model(model_path: str | Path) -> tuple[object, dict[str, int]]:
+def normalize_predictions(pred: np.ndarray) -> np.ndarray:
+    pred = np.asarray(pred)
+    if pred.ndim > 1:
+        return np.argmax(pred, axis=1).astype(np.int64)
+    return pred.astype(np.int64, copy=False)
+
+
+def load_model(model_path: str | Path) -> dict:
     """加载保存的模型."""
     with open(model_path, "rb") as f:
-        data = pickle.load(f)
-    return data["model"], data["label_map"]
+        return pickle.load(f)
 
 
 def predict_csv(
@@ -46,8 +52,10 @@ def predict_csv(
             "confidence": float,              # 多数投票的置信度
         }
     """
-    # 加载模型
-    model, label_map = load_model(model_path)
+    # 加载模型和训练时的预处理信息
+    model_data = load_model(model_path)
+    model = model_data["model"]
+    label_map = model_data["label_map"]
     inv_label_map = {v: k for k, v in label_map.items()}
 
     # 默认配置
@@ -55,20 +63,24 @@ def predict_csv(
         import yaml
         with open(_SCRIPT_DIR / "config.yaml", "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
-        preproc_config = {"preprocess": config["preprocess"], "window": config["window"]}
+        preproc_config = {"preprocess": config["preprocess"], "window": config["window"], "segment": config.get("segment", {})}
         feature_cfg = config["features"]
 
-    # 预处理
-    result = preprocess_single_file(csv_path, preproc_config)
-    if result is None:
-        raise ValueError(f"Failed to preprocess {csv_path}")
+    preproc_config = model_data.get("preproc_config", preproc_config)
+    feature_cfg = model_data.get("feature_cfg", feature_cfg)
+    norm_stats = model_data.get("norm_stats")
+    if norm_stats is None:
+        raise ValueError("Model file does not contain norm_stats; retrain with the updated train_baseline.py")
 
-    amp_matrix, labels, meta = result
+    # 预处理
+    result = preprocess_pipeline([str(csv_path)], preproc_config, fit_norm=False, norm_stats=norm_stats)
 
     # 提取特征
     features = []
-    for win in result["windows"]:
-        feat = extract_all_features(win, rssi_window=None, cfg=feature_cfg)
+    meta_list = result.get("metadata", [])
+    for i, win in enumerate(result["windows"]):
+        rssi_window = meta_list[i].get("rssi") if i < len(meta_list) else None
+        feat = extract_all_features(win, rssi_window=rssi_window, cfg=feature_cfg)
         features.append(feat)
 
     if not features:
@@ -80,7 +92,7 @@ def predict_csv(
     if hasattr(model, "predict_proba"):
         probs = model.predict_proba(X)  # [n_windows, n_classes]
     else:
-        preds = model.predict(X)
+        preds = normalize_predictions(model.predict(X))
         n_classes = len(label_map)
         probs = np.zeros((len(preds), n_classes))
         probs[np.arange(len(preds)), preds] = 1.0
@@ -119,7 +131,7 @@ def main():
     with open(_SCRIPT_DIR / "config.yaml", "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
-    preproc_config = {"preprocess": config["preprocess"], "window": config["window"]}
+    preproc_config = {"preprocess": config["preprocess"], "window": config["window"], "segment": config.get("segment", {})}
     feature_cfg = config["features"]
 
     result = predict_csv(csv_path, model_path, preproc_config, feature_cfg)

@@ -106,7 +106,7 @@ def extract_inter_carrier_corr(window: np.ndarray) -> dict[str, float]:
         window: [T, C]
     """
     # 计算子载波间的相关系数矩阵
-    corr_matrix = np.corrcoef(window.T)  # [C, C]
+    corr_matrix = np.nan_to_num(np.corrcoef(window.T), nan=0.0, posinf=0.0, neginf=0.0)  # [C, C]
     # 取上三角（去掉对角线）
     triu_idx = np.triu_indices(corr_matrix.shape[0], k=1)
     corr_values = corr_matrix[triu_idx]
@@ -139,18 +139,22 @@ def extract_all_features(
 
     feat_dict = {}
 
-    # 时域统计
-    if cfg.get("temporal_stats", True):
-        temporal_stats = cfg.get("temporal_stats_list", ["mean", "std", "max", "min", "ptp", "energy"])
+    temporal_cfg = cfg.get("temporal_stats", ["mean", "std", "max", "min", "ptp", "energy"])
+    if temporal_cfg:
+        temporal_stats = (
+            temporal_cfg
+            if isinstance(temporal_cfg, list)
+            else cfg.get("temporal_stats_list", ["mean", "std", "max", "min", "ptp", "energy"])
+        )
         feat_dict.update(extract_temporal_stats(window, stats=temporal_stats))
 
-    # 差分特征
-    if cfg.get("diff_stats", True):
-        diff_stats = cfg.get("diff_stats_list", ["mean", "std", "energy"])
+    diff_cfg = cfg.get("diff_stats", ["mean", "std", "energy"])
+    if diff_cfg:
+        diff_stats = diff_cfg if isinstance(diff_cfg, list) else cfg.get("diff_stats_list", ["mean", "std", "energy"])
         feat_dict.update(extract_diff_stats(window, stats=diff_stats))
 
-    # RSSI 特征
-    if cfg.get("rssi_stats", True) and rssi_window is not None:
+    rssi_cfg = cfg.get("rssi_stats", True)
+    if rssi_cfg and rssi_window is not None:
         feat_dict.update(extract_rssi_stats(rssi_window))
 
     # 子载波间相关性

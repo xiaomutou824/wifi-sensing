@@ -4,7 +4,7 @@
 data:
   # CSV 文件搜索路径（相对于 Baseline/ 或绝对路径）
   csv_paths:
-    - "../CSI collection/data/*.csv"
+    - "../CSI_collection_AP_STA/data/*.csv"
   
   # 输出目录
   output_dir: "./output"
@@ -15,8 +15,14 @@ data:
     val: 0.15
     test: 0.15
   
-  # 是否按采集日期划分（强烈建议 true）
-  split_by_session: true
+  # 数据划分方式：
+  #   stratified_label: 按文件名里的动作标签分层划分（推荐用于快速 baseline）
+  #   session: 按采集日期/session 划分（推荐用于跨 session 泛化评估）
+  #   file: 按排序后的文件列表直接划分
+  split_strategy: "stratified_label"
+
+  # 旧配置兼容项：如果没有 split_strategy，则由它决定 session/file
+  split_by_session: false
 
 # ==================== 预处理参数 ====================
 # 引用 data preprocessing/ 中的配置
@@ -38,6 +44,17 @@ window:
   stride: 64
   min_windows: 1
   label_strategy: "majority"
+
+# ==================== 动作切分（可选） ====================
+segment:
+  enabled: false
+  method: "diff_energy"
+  baseline_window: 50
+  smooth_window: 10
+  threshold_ratio: 3.0
+  min_segment_len: 30
+  padding: 15
+  default_label: "idle"
 
 # ==================== 特征工程 ====================
 features:

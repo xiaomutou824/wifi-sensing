@@ -1,0 +1,46 @@
+data:
+  train_npz: "../data preprocessing/processed/train_windows.npz"
+  val_npz: "../data preprocessing/processed/val_windows.npz"
+  test_npz: "../data preprocessing/processed/test_windows.npz"
+  output_dir: "./output"
+  labels: ["idle", "walking", "sitting_down", "standing_up", "fall"]
+
+train:
+  epochs: 80
+  batch_size: 32
+  num_workers: 0
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  patience: 15
+  seed: 42
+  device: "auto"
+  use_amp: true
+
+model:
+  cnn_channels: [32, 64, 128]
+  lstm_hidden: 64
+  lstm_layers: 2
+  lstm_dropout: 0.3
+  classifier_dropout: 0.5
+  use_attention: false
+  attention_heads: 4
+
+augment:
+  enabled: true
+  time_shift: true
+  time_shift_range: 10
+  time_stretch: true
+  time_stretch_range: [0.8, 1.2]
+  gaussian_noise: 0.01
+  amplitude_scale: 0.1
+  subcarrier_mask_ratio: 0.05
+  timestep_mask_ratio: 0.05
+  mixup: false
+  mixup_alpha: 0.4
+  oversample: true
+  class_weights:
+    idle: 1.0
+    walking: 1.0
+    sitting_down: 1.2
+    standing_up: 1.2
+    fall: 3.0

@@ -12,7 +12,6 @@
 
 from __future__ import annotations
 
-import glob
 from pathlib import Path
 from typing import Any
 
@@ -155,6 +154,35 @@ def frames_to_amplitude_matrix(frames: list[CSIRawFrame]) -> np.ndarray:
     return np.stack(amps, axis=0) if amps else np.array([], dtype=np.float32).reshape(0, 0)
 
 
+def frames_to_feature_matrix(frames: list[CSIRawFrame], output_type: str = "amplitude") -> np.ndarray:
+    """将帧列表转为模型输入矩阵.
+
+    output_type:
+        amplitude -> [T, C]
+        phase -> [T, C]
+        both -> [T, 2*C]，前半为幅度，后半为相位
+    """
+    features = []
+    for f in frames:
+        amp = iq_to_amplitude(f.iq_array)
+        if amp.size == 0:
+            continue
+
+        if output_type == "amplitude":
+            feat = amp
+        elif output_type == "phase":
+            feat = iq_to_phase(f.iq_array)
+        elif output_type == "both":
+            phase = iq_to_phase(f.iq_array)
+            feat = np.concatenate([amp, phase], axis=0)
+        else:
+            raise ValueError(f"Unknown output_type: {output_type}")
+
+        features.append(feat.astype(np.float32, copy=False))
+
+    return np.stack(features, axis=0) if features else np.array([], dtype=np.float32).reshape(0, 0)
+
+
 def frames_to_metadata(frames: list[CSIRawFrame]) -> dict[str, np.ndarray]:
     """提取元数据数组."""
     return {
@@ -170,10 +198,11 @@ def frames_to_metadata(frames: list[CSIRawFrame]) -> dict[str, np.ndarray]:
 def extract_windows(
     amp_matrix: np.ndarray,
     labels: np.ndarray,
+    metadata: dict[str, np.ndarray] | None = None,
     window_size: int = 128,
     stride: int = 64,
     label_strategy: str = "majority",
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, list[dict[str, Any]]]:
     """滑动窗口切分.
 
     Args:
@@ -184,15 +213,17 @@ def extract_windows(
         label_strategy: "majority" | "center" | "last"
 
     Returns:
-        windows: [n_windows, window_size, n_subcarriers]
+        windows: [n_windows, window_size, n_features]
         window_labels: [n_windows] 字符串标签
+        window_meta: 每个窗口的起止帧和可选 RSSI/时间序列
     """
     n_frames, n_sc = amp_matrix.shape
     if n_frames < window_size:
-        return np.array([]).reshape(0, window_size, n_sc), np.array([])
+        return np.array([]).reshape(0, window_size, n_sc), np.array([]), []
 
     windows = []
     window_labels = []
+    window_meta = []
 
     for start in range(0, n_frames - window_size + 1, stride):
         end = start + window_size
@@ -211,8 +242,36 @@ def extract_windows(
 
         windows.append(win)
         window_labels.append(label)
+        meta_item: dict[str, Any] = {"start_frame": start, "end_frame": end}
+        if metadata is not None:
+            if "rssi" in metadata:
+                meta_item["rssi"] = metadata["rssi"][start:end]
+            if "local_time_us" in metadata:
+                meta_item["local_time_us"] = metadata["local_time_us"][start:end]
+            if "seq" in metadata:
+                meta_item["seq"] = metadata["seq"][start:end]
+        window_meta.append(meta_item)
 
-    return np.stack(windows, axis=0), np.array(window_labels)
+    return np.stack(windows, axis=0), np.array(window_labels), window_meta
+
+
+def _build_keep_idx(feature_matrix: np.ndarray, output_type: str) -> np.ndarray:
+    """根据训练数据计算稳定的保留特征索引."""
+    if output_type != "both":
+        return find_zero_subcarriers(feature_matrix)
+
+    half = feature_matrix.shape[1] // 2
+    amp_keep = find_zero_subcarriers(feature_matrix[:, :half])
+    return np.concatenate([amp_keep, amp_keep + half]).astype(np.int64)
+
+
+def _apply_keep_idx(feature_matrix: np.ndarray, keep_idx: np.ndarray) -> np.ndarray:
+    if np.max(keep_idx, initial=-1) >= feature_matrix.shape[1]:
+        raise ValueError(
+            f"keep_idx expects at least {int(np.max(keep_idx)) + 1} features, "
+            f"but matrix has {feature_matrix.shape[1]}"
+        )
+    return feature_matrix[:, keep_idx]
 
 
 def preprocess_single_file(
@@ -258,18 +317,12 @@ def preprocess_single_file(
         print(f"  Warning: no valid frames after filtering in {csv_path}")
         return None
 
-    # 3. 转幅度矩阵
-    amp_matrix = frames_to_amplitude_matrix(frames)
+    # 3. 转 I/Q 特征矩阵
+    output_type = pre_cfg.get("output_type", "amplitude")
+    amp_matrix = frames_to_feature_matrix(frames, output_type=output_type)
     metadata = frames_to_metadata(frames)
 
-    print(f"  Valid frames: {amp_matrix.shape[0]}, subcarriers: {amp_matrix.shape[1]}")
-
-    # 4. 去零子载波
-    if pre_cfg.get("remove_zero_subcarriers", True):
-        keep_idx = find_zero_subcarriers(amp_matrix)
-        if len(keep_idx) < amp_matrix.shape[1]:
-            print(f"  Removed {amp_matrix.shape[1] - len(keep_idx)} zero subcarriers, kept {len(keep_idx)}")
-        amp_matrix = amp_matrix[:, keep_idx]
+    print(f"  Valid frames: {amp_matrix.shape[0]}, features: {amp_matrix.shape[1]}")
 
     return amp_matrix, metadata["label"], metadata
 
@@ -317,26 +370,56 @@ def preprocess_pipeline(
     if not all_amp_matrices:
         raise ValueError("No valid data found in all provided CSV files.")
 
-    # 2. 合并计算归一化统计量
+    # 2. 根据训练集拟合稳定的子载波索引，再应用到所有 split
     pre_cfg = config["preprocess"]
     norm_method = pre_cfg.get("normalize", "zscore")
+    output_type = pre_cfg.get("output_type", "amplitude")
+    remove_zero = pre_cfg.get("remove_zero_subcarriers", True)
+
+    if norm_stats is None:
+        norm_stats = {}
+
+    if remove_zero:
+        if fit_norm:
+            keep_idx = _build_keep_idx(np.concatenate(all_amp_matrices, axis=0), output_type)
+            norm_stats["keep_idx"] = keep_idx
+            print(f"\n[Subcarrier] Kept {len(keep_idx)} / {all_amp_matrices[0].shape[1]} features")
+        elif "keep_idx" not in norm_stats:
+            raise ValueError("norm_stats['keep_idx'] must be provided when fit_norm=False")
+
+        keep_idx = np.asarray(norm_stats["keep_idx"], dtype=np.int64)
+        all_amp_matrices = [_apply_keep_idx(m, keep_idx) for m in all_amp_matrices]
+    else:
+        norm_stats["keep_idx"] = None
+
+    # 3. 可选自动切分/重标注
+    seg_cfg = config.get("segment", {})
+    if seg_cfg.get("enabled", False):
+        from segment import auto_segment_pipeline
+
+        for i, (amp_matrix, labels) in enumerate(zip(all_amp_matrices, all_labels)):
+            all_amp_matrices[i], all_labels[i] = auto_segment_pipeline(
+                amp_matrix, labels, seg_cfg, default_label=seg_cfg.get("default_label", "idle")
+            )
 
     if fit_norm:
         concatenated = np.concatenate(all_amp_matrices, axis=0)
         if norm_method == "energy":
             # 能量归一化不需要全局统计
-            norm_stats = {"method": "energy"}
+            norm_stats["method"] = "energy"
         else:
-            norm_stats = compute_norm_stats(concatenated, method=norm_method)
+            norm_stats.update(compute_norm_stats(concatenated, method=norm_method))
+        norm_stats["output_type"] = output_type
         print(f"\n[Norm] Computed {norm_method} stats: {norm_stats}")
     elif norm_stats is None and norm_method != "none":
         raise ValueError("norm_stats must be provided when fit_norm=False")
 
-    # 3. 应用归一化 + 滑动窗口
+    # 4. 应用归一化 + 滑动窗口
     win_cfg = config["window"]
     window_size = win_cfg["size"]
     stride = win_cfg["stride"]
     label_strategy = win_cfg.get("label_strategy", "majority")
+    min_windows = win_cfg.get("min_windows", 1)
 
     all_windows = []
     all_window_labels = []
@@ -352,23 +435,36 @@ def preprocess_pipeline(
             amp_matrix = apply_norm(amp_matrix, norm_stats)
 
         # 滑动窗口
-        windows, win_labels = extract_windows(
-            amp_matrix, labels, window_size=window_size, stride=stride,
+        windows, win_labels, win_meta = extract_windows(
+            amp_matrix, labels, metadata=meta, window_size=window_size, stride=stride,
             label_strategy=label_strategy
         )
 
         if windows.size == 0:
             print(f"  Warning: no windows extracted from {fname}")
             continue
+        if windows.shape[0] < min_windows:
+            print(f"  Warning: only {windows.shape[0]} windows from {fname}; min_windows={min_windows}, skipped")
+            continue
 
         for i in range(windows.shape[0]):
             all_windows.append(windows[i])
             all_window_labels.append(win_labels[i])
+            start = int(win_meta[i]["start_frame"])
+            end = int(win_meta[i]["end_frame"])
             all_window_meta.append({
                 "file": fname,
                 "window_idx": i,
+                "start_frame": start,
+                "end_frame": end,
                 "node_id": int(meta["node_id"][0]) if meta["node_id"].size > 0 else 0,
+                "rssi": win_meta[i].get("rssi"),
+                "local_time_us": win_meta[i].get("local_time_us"),
+                "seq": win_meta[i].get("seq"),
             })
+
+    if not all_windows:
+        raise ValueError("No windows extracted. Check window size, min_windows, and input file lengths.")
 
     print(f"\n[Result] Total windows: {len(all_windows)}, labels: {set(all_window_labels)}")
 

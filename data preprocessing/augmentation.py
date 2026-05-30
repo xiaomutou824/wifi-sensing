@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+import torch
 
 
 def augment_window(window: np.ndarray, cfg: dict[str, Any]) -> np.ndarray:
@@ -54,7 +55,7 @@ def augment_window(window: np.ndarray, cfg: dict[str, Any]) -> np.ndarray:
 
 
 def time_shift(window: np.ndarray, max_shift: int = 10) -> np.ndarray:
-    """随机时间偏移：循环移位窗口.
+    """随机时间偏移：非循环移位窗口，空出的部分用边缘帧填充.
 
     Args:
         window: [T, C]
@@ -63,7 +64,18 @@ def time_shift(window: np.ndarray, max_shift: int = 10) -> np.ndarray:
     if max_shift <= 0:
         return window
     shift = np.random.randint(-max_shift, max_shift + 1)
-    return np.roll(window, shift, axis=0)
+    if shift == 0:
+        return window
+
+    aug = np.empty_like(window)
+    if shift > 0:
+        aug[:shift] = window[0]
+        aug[shift:] = window[:-shift]
+    else:
+        shift_abs = abs(shift)
+        aug[-shift_abs:] = window[-1]
+        aug[:-shift_abs] = window[shift_abs:]
+    return aug
 
 
 def time_stretch(window: np.ndarray, stretch_range: list[float] = [0.8, 1.2]) -> np.ndarray:
@@ -186,21 +198,21 @@ class MixupCollator:
         self.alpha = alpha
         self.num_classes = num_classes
 
-    def __call__(self, batch: list[tuple[np.ndarray, int]]) -> tuple[np.ndarray, np.ndarray]:
+    def __call__(self, batch: list[tuple[torch.Tensor, torch.Tensor]]) -> tuple[torch.Tensor, torch.Tensor]:
         """batch: list of (window, label_int)."""
-        xs = np.stack([item[0] for item in batch], axis=0)  # [B, T, C]
-        ys = np.array([item[1] for item in batch], dtype=np.int64)
+        xs = torch.stack([item[0] for item in batch], dim=0)  # [B, T, C]
+        ys = torch.stack([item[1] for item in batch], dim=0).long()
 
         # 只对同一批次内随机配对做 mixup
-        lam = np.random.beta(self.alpha, self.alpha)
+        lam = float(np.random.beta(self.alpha, self.alpha))
         batch_size = xs.shape[0]
-        indices = np.random.permutation(batch_size)
+        indices = torch.randperm(batch_size)
 
         mixed_x = lam * xs + (1 - lam) * xs[indices]
 
         # 标签转为 one-hot 后混合
-        y_onehot = np.zeros((batch_size, self.num_classes), dtype=np.float32)
-        y_onehot[np.arange(batch_size), ys] = 1.0
+        y_onehot = torch.zeros((batch_size, self.num_classes), dtype=torch.float32)
+        y_onehot[torch.arange(batch_size), ys] = 1.0
         y_onehot_mix = lam * y_onehot + (1 - lam) * y_onehot[indices]
 
         return mixed_x, y_onehot_mix

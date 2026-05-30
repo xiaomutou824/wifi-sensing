@@ -33,7 +33,6 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
-from sklearn.model_selection import StratifiedKFold
 from tqdm import tqdm
 
 # 把 data preprocessing/ 加入路径，复用其代码
@@ -43,7 +42,18 @@ sys.path.insert(0, str(_PREPROC_DIR))
 
 from features import extract_all_features
 from preprocess import preprocess_pipeline
-from utils import load_norm_stats, save_norm_stats
+
+
+def normalize_predictions(pred: np.ndarray) -> np.ndarray:
+    """Convert model output to 1D class indices.
+
+    Some XGBoost versions return a probability matrix from predict() when the
+    objective is multi:softprob. sklearn metrics need class ids instead.
+    """
+    pred = np.asarray(pred)
+    if pred.ndim > 1:
+        return np.argmax(pred, axis=1).astype(np.int64)
+    return pred.astype(np.int64, copy=False)
 
 
 def group_files_by_session(csv_files: list[str]) -> dict[str, list[str]]:
@@ -58,7 +68,20 @@ def group_files_by_session(csv_files: list[str]) -> dict[str, list[str]]:
     return dict(sessions)
 
 
-def split_by_session(
+def infer_label_from_filename(csv_file: str) -> str:
+    """从 node1_<label>_YYYYMMDD_HHMMSS.csv 形式的文件名中提取 label."""
+    stem = Path(csv_file).stem
+    m = re.match(r"node\d+_(.+)_\d{8}_\d{6}$", stem)
+    if m:
+        return m.group(1)
+
+    # Fallback: remove timestamp suffix and optional node prefix.
+    stem = re.sub(r"_\d{8}_\d{6}$", "", stem)
+    stem = re.sub(r"^node\d+_", "", stem)
+    return stem or "unknown"
+
+
+def split_by_session_ratio(
     sessions: dict[str, list[str]],
     ratios: dict[str, float],
 ) -> tuple[list[str], list[str], list[str]]:
@@ -85,10 +108,72 @@ def split_by_session(
     return train_files, val_files, test_files
 
 
+def split_by_file_ratio(
+    csv_files: list[str],
+    ratios: dict[str, float],
+) -> tuple[list[str], list[str], list[str]]:
+    """按文件划分，保证同一 CSV 只落在一个 split。"""
+    n = len(csv_files)
+    if n == 0:
+        return [], [], []
+    if n == 1:
+        return csv_files, [], []
+
+    train_cutoff = max(1, int(n * ratios["train"]))
+    val_cutoff = int(n * (ratios["train"] + ratios["val"]))
+    if n >= 3 and val_cutoff == train_cutoff:
+        val_cutoff = train_cutoff + 1
+
+    return csv_files[:train_cutoff], csv_files[train_cutoff:val_cutoff], csv_files[val_cutoff:]
+
+
+def split_by_label_stratified(
+    csv_files: list[str],
+    ratios: dict[str, float],
+) -> tuple[list[str], list[str], list[str]]:
+    """按文件名 label 分层划分，每个类别内部再按比例切分。"""
+    by_label: dict[str, list[str]] = defaultdict(list)
+    for f in sorted(csv_files):
+        by_label[infer_label_from_filename(f)].append(f)
+
+    train_files: list[str] = []
+    val_files: list[str] = []
+    test_files: list[str] = []
+
+    print("Label-stratified split:")
+    for label, files in sorted(by_label.items()):
+        n = len(files)
+        if n == 1:
+            label_train, label_val, label_test = files, [], []
+        elif n == 2:
+            label_train, label_val, label_test = files[:1], files[1:], []
+        else:
+            train_cutoff = max(1, int(n * ratios["train"]))
+            val_count = max(1, int(n * ratios["val"]))
+            if train_cutoff + val_count >= n:
+                train_cutoff = max(1, n - 2)
+                val_count = 1
+            val_cutoff = train_cutoff + val_count
+            label_train = files[:train_cutoff]
+            label_val = files[train_cutoff:val_cutoff]
+            label_test = files[val_cutoff:]
+
+        train_files.extend(label_train)
+        val_files.extend(label_val)
+        test_files.extend(label_test)
+        print(
+            f"  {label}: total={n}, "
+            f"train={len(label_train)}, val={len(label_val)}, test={len(label_test)}"
+        )
+
+    return sorted(train_files), sorted(val_files), sorted(test_files)
+
+
 def extract_features_from_pipeline_result(
     result: dict,
     feature_cfg: dict,
-) -> tuple[np.ndarray, np.ndarray]:
+    label_map: dict[str, int] | None = None,
+) -> tuple[np.ndarray, np.ndarray, dict[str, int]]:
     """从 preprocess_pipeline 的结果中提取手工特征向量.
 
     Args:
@@ -103,20 +188,30 @@ def extract_features_from_pipeline_result(
     labels_str = result["labels"]        # list of str
     meta_list = result.get("metadata", [])
 
-    # 构建标签映射（基于所有数据）
-    all_labels = sorted(set(labels_str))
-    label_map = {label: idx for idx, label in enumerate(all_labels)}
+    if label_map is None:
+        all_labels = sorted(set(labels_str))
+        label_map = {label: idx for idx, label in enumerate(all_labels)}
 
     # 提取特征
     features = []
     valid_labels = []
 
     for i, win in enumerate(tqdm(windows, desc="Extracting features")):
-        # RSSI 窗口：从原始帧的 metadata 中重建（简化：用幅度代替）
-        # 如果未来需要真实 RSSI，需要把原始 metadata 传进来
-        feat = extract_all_features(win, rssi_window=None, cfg=feature_cfg)
+        label = labels_str[i]
+        if label not in label_map:
+            print(f"  Warning: label {label!r} not in training label_map, skipped")
+            continue
+
+        rssi_window = None
+        if i < len(meta_list):
+            rssi_window = meta_list[i].get("rssi")
+
+        feat = extract_all_features(win, rssi_window=rssi_window, cfg=feature_cfg)
         features.append(feat)
-        valid_labels.append(label_map[labels_str[i]])
+        valid_labels.append(label_map[label])
+
+    if not features:
+        return np.empty((0, 0), dtype=np.float32), np.empty((0,), dtype=np.int64), label_map
 
     X = np.stack(features, axis=0)
     y = np.array(valid_labels, dtype=np.int64)
@@ -155,10 +250,10 @@ def train_model(
             subsample=model_cfg.get("subsample", 0.8),
             colsample_bytree=model_cfg.get("colsample_bytree", 0.8),
             objective=model_cfg.get("objective", "multi:softprob"),
+            num_class=len(label_map),
             eval_metric=model_cfg.get("eval_metric", "mlogloss"),
             random_state=model_cfg.get("random_state", 42),
             n_jobs=model_cfg.get("n_jobs", 4),
-            use_label_encoder=False,
         )
     elif model_name == "random_forest":
         model = RandomForestClassifier(
@@ -186,7 +281,11 @@ def train_model(
     else:
         raise ValueError(f"Unknown model: {model_name}")
 
-    model.fit(X_train, y_train)
+    sample_weight = None
+    if model_name == "xgboost" and weight_dict:
+        sample_weight = np.array([weight_dict.get(int(y), 1.0) for y in y_train], dtype=np.float32)
+
+    model.fit(X_train, y_train, sample_weight=sample_weight)
     return model
 
 
@@ -198,7 +297,8 @@ def evaluate_model(
     split_name: str = "",
 ) -> dict[str, float]:
     """评估模型."""
-    y_pred = model.predict(X)
+    y_pred = normalize_predictions(model.predict(X))
+    present_labels = sorted(set(y.tolist()) | set(y_pred.tolist()))
 
     acc = accuracy_score(y, y_pred)
     macro_f1 = f1_score(y, y_pred, average="macro", zero_division=0)
@@ -206,7 +306,7 @@ def evaluate_model(
     macro_recall = recall_score(y, y_pred, average="macro", zero_division=0)
 
     inv_map = {v: k for k, v in label_map.items()}
-    target_names = [inv_map[i] for i in range(len(inv_map))]
+    target_names = [inv_map[i] for i in present_labels]
 
     print(f"\n[{split_name}] Results:")
     print(f"  Accuracy:      {acc:.4f}")
@@ -214,7 +314,10 @@ def evaluate_model(
     print(f"  Macro Prec:    {macro_precision:.4f}")
     print(f"  Macro Recall:  {macro_recall:.4f}")
     print(f"\nClassification Report:")
-    print(classification_report(y, y_pred, target_names=target_names, digits=4, zero_division=0))
+    print(classification_report(
+        y, y_pred, labels=present_labels, target_names=target_names,
+        digits=4, zero_division=0,
+    ))
 
     return {
         "accuracy": acc,
@@ -260,7 +363,7 @@ def plot_confusion_matrix(
     if save_path:
         plt.savefig(save_path, dpi=150)
         print(f"Saved confusion matrix to {save_path}")
-    plt.show()
+    plt.close(fig)
 
 
 def plot_feature_importance(
@@ -287,7 +390,7 @@ def plot_feature_importance(
     if save_path:
         plt.savefig(save_path, dpi=150)
         print(f"Saved feature importance to {save_path}")
-    plt.show()
+    plt.close()
 
 
 def run_loso_cv(
@@ -308,6 +411,7 @@ def run_loso_cv(
     best_f1 = -1.0
     best_model = None
     best_label_map = None
+    best_norm_stats = None
 
     for i, test_date in enumerate(sorted_dates):
         train_dates = [d for d in sorted_dates if d != test_date]
@@ -328,7 +432,7 @@ def run_loso_cv(
 
         # 提取特征
         X_train, y_train, label_map = extract_features_from_pipeline_result(train_data, feature_cfg)
-        X_test, y_test, _ = extract_features_from_pipeline_result(test_data, feature_cfg)
+        X_test, y_test, _ = extract_features_from_pipeline_result(test_data, feature_cfg, label_map=label_map)
 
         if X_train.size == 0 or X_test.size == 0:
             print("  Skip: empty data")
@@ -345,6 +449,7 @@ def run_loso_cv(
             best_f1 = result["macro_f1"]
             best_model = model
             best_label_map = label_map
+            best_norm_stats = train_data["norm_stats"]
 
     # 汇总
     if not all_results:
@@ -362,7 +467,13 @@ def run_loso_cv(
     if best_model is not None:
         model_path = output_dir / f"best_{model_name}_loso.pkl"
         with open(model_path, "wb") as f:
-            pickle.dump({"model": best_model, "label_map": best_label_map}, f)
+            pickle.dump({
+                "model": best_model,
+                "label_map": best_label_map,
+                "norm_stats": best_norm_stats,
+                "feature_cfg": feature_cfg,
+                "preproc_config": preproc_config,
+            }, f)
         print(f"Saved best model to {model_path}")
 
 
@@ -374,10 +485,18 @@ def run_simple_split(
     class_weights: dict[str, float] | None,
     output_dir: Path,
     ratios: dict[str, float],
+    split_strategy: str = "session",
 ) -> None:
     """简单划分：按文件/session 分成 train/val/test."""
-    sessions = group_files_by_session(csv_files)
-    train_files, val_files, test_files = split_by_session(sessions, ratios)
+    if split_strategy == "session":
+        sessions = group_files_by_session(csv_files)
+        train_files, val_files, test_files = split_by_session_ratio(sessions, ratios)
+    elif split_strategy == "file":
+        train_files, val_files, test_files = split_by_file_ratio(csv_files, ratios)
+    elif split_strategy == "stratified_label":
+        train_files, val_files, test_files = split_by_label_stratified(csv_files, ratios)
+    else:
+        raise ValueError(f"Unknown split_strategy: {split_strategy}")
 
     print(f"Train: {len(train_files)} files")
     print(f"Val:   {len(val_files)} files")
@@ -404,12 +523,15 @@ def run_simple_split(
 
     # 提取特征
     X_train, y_train, label_map = extract_features_from_pipeline_result(train_data, feature_cfg)
-    X_val, y_val, _ = (extract_features_from_pipeline_result(val_data, feature_cfg)
+    X_val, y_val, _ = (extract_features_from_pipeline_result(val_data, feature_cfg, label_map=label_map)
                        if val_data else (None, None, None))
-    X_test, y_test, _ = (extract_features_from_pipeline_result(test_data, feature_cfg)
+    X_test, y_test, _ = (extract_features_from_pipeline_result(test_data, feature_cfg, label_map=label_map)
                          if test_data else (None, None, None))
 
     print(f"\nFeature shape: {X_train.shape}")
+    if len(set(y_train.tolist())) < 2:
+        print("ERROR: Training split has fewer than 2 classes. Collect more labeled actions before training Baseline.")
+        return
 
     # 训练所有启用的模型
     for model_name, model_cfg in model_cfgs.items():
@@ -440,7 +562,14 @@ def run_simple_split(
         # 保存模型
         model_path = output_dir / f"model_{model_name}.pkl"
         with open(model_path, "wb") as f:
-            pickle.dump({"model": model, "label_map": label_map}, f)
+            pickle.dump({
+                "model": model,
+                "label_map": label_map,
+                "norm_stats": train_data["norm_stats"],
+                "feature_cfg": feature_cfg,
+                "preproc_config": preproc_config,
+                "model_name": model_name,
+            }, f)
         print(f"Saved model to {model_path}")
 
 
@@ -475,6 +604,7 @@ def main():
     preproc_config = {
         "preprocess": config["preprocess"],
         "window": config["window"],
+        "segment": config.get("segment", {}),
     }
     feature_cfg = config["features"]
     model_cfgs = config["models"]
@@ -497,6 +627,10 @@ def main():
             csv_files, preproc_config, feature_cfg,
             model_cfgs, class_weights, output_dir,
             config["data"]["split_ratio"],
+            split_strategy=config["data"].get(
+                "split_strategy",
+                "session" if config["data"].get("split_by_session", True) else "file",
+            ),
         )
 
     print(f"\n{'='*60}")

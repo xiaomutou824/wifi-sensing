@@ -5,20 +5,25 @@
 data:
   # CSV 数据文件搜索路径，支持 glob 模式
   csv_paths:
-    - "../CSI collection/data/*.csv"
+    - "../CSI_collection_AP_STA/data/*.csv"
   
   # 输出目录
   output_dir: "./processed"
   
-  # 训练/验证/测试划分比例（按 session 或文件划分时无效）
+  # 训练/验证/测试划分比例
   split_ratio:
     train: 0.7
     val: 0.15
     test: 0.15
   
-  # 是否按 session（采集日期）划分，而非随机划分
-  # 强烈建议设为 true，以验证跨时间泛化能力
-  split_by_session: true
+  # 数据划分方式：
+  #   stratified_label: 按文件名里的动作标签分层划分（推荐用于快速训练/调试）
+  #   session: 按采集日期/session 划分（推荐用于跨 session 泛化评估）
+  #   file: 按排序后的文件列表直接划分
+  split_strategy: "stratified_label"
+
+  # 旧配置兼容项：如果没有 split_strategy，则由它决定 session/file
+  split_by_session: false
 
 # ==================== CSI 参数 ====================
 csi:
@@ -101,11 +106,14 @@ segment:
   enabled: false
   
   # 切分算法参数
-  # 基于帧间方差阈值检测动作起止
-  window_size: 50        # 用于计算基线的窗口（帧）
+  # method 推荐 diff_energy；variance 对某些静止 RSSI/幅度漂移更敏感
+  method: "diff_energy"  # variance | diff_energy
+  baseline_window: 50    # 用于计算基线的窗口（帧）
+  smooth_window: 10      # 活动指标平滑窗口（帧）
   threshold_ratio: 3.0   # 方差超过基线的倍数判定为动作
   min_segment_len: 30    # 最小动作片段长度（帧）
   padding: 15            # 动作前后保留的静止帧数
+  default_label: "idle"  # 未检测为动作的区域重标为 idle
 
 # ==================== 数据增强 ====================
 augment:
