@@ -5,7 +5,7 @@ from __future__ import annotations
 import pickle
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 import torch
@@ -27,35 +27,35 @@ class CSIDataset(Dataset):
 
     def __init__(
         self,
-        windows: list[np.ndarray],
-        labels: list[str],
+        windows: Sequence[np.ndarray] | np.ndarray,
+        labels: Sequence[str] | np.ndarray,
         label_map: dict[str, int],
         augment_cfg: dict[str, Any] | None = None,
         is_training: bool = False,
     ):
         self.windows = windows
-        self.labels_str = labels
+        self.labels_str = [str(label) for label in labels]
         self.label_map = label_map
         self.augment_cfg = augment_cfg
         self.is_training = is_training
 
         # 转为整数标签
-        self.labels = np.array([label_map[l] for l in labels], dtype=np.int64)
+        self.labels = np.array([label_map[l] for l in self.labels_str], dtype=np.int64)
 
         # 统计
         self._print_stats()
 
     def _print_stats(self) -> None:
         counter = Counter(self.labels_str)
-        print(f"[Dataset] Samples: {len(self.windows)}")
+        print(f"[Dataset] Samples: {len(self.windows)}", flush=True)
         for label, count in sorted(counter.items(), key=lambda x: x[1], reverse=True):
-            print(f"          - {label}: {count} ({count/len(self.windows)*100:.1f}%)")
+            print(f"          - {label}: {count} ({count/len(self.windows)*100:.1f}%)", flush=True)
 
     def __len__(self) -> int:
         return len(self.windows)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        window = self.windows[idx].copy()  # [T, C]
+        window = np.asarray(self.windows[idx], dtype=np.float32).copy()  # [T, C]
         label = self.labels[idx]
 
         # 数据增强（仅训练时）
@@ -99,6 +99,30 @@ def load_processed_npz(npz_path: str | Path) -> tuple[list[np.ndarray], list[str
     data = np.load(npz_path, allow_pickle=True)
     windows = [data["windows"][i] for i in range(data["windows"].shape[0])]
     labels = data["labels"].tolist()
+    return windows, labels
+
+
+def load_processed_split(path: str | Path) -> tuple[Sequence[np.ndarray] | np.ndarray, list[str]]:
+    """加载训练 split。
+
+    支持旧格式 ``*_windows.npz``，也支持更省内存的新格式
+    ``*_windows.npy`` + 同目录 ``*_labels.npy``。Numpy ``.npz`` 是 zip
+    容器，不能真正 mmap；大数据训练建议使用 ``.npy`` 格式。
+    """
+    split_path = Path(path)
+    if split_path.suffix == ".npz":
+        return load_processed_npz(split_path)
+    if split_path.suffix != ".npy":
+        raise ValueError(f"Unsupported split file format: {split_path}")
+
+    labels_path = split_path.with_name(split_path.name.replace("_windows.npy", "_labels.npy"))
+    if labels_path == split_path or not labels_path.exists():
+        raise FileNotFoundError(f"Label file not found for {split_path}: expected {labels_path}")
+
+    windows = np.load(split_path, mmap_mode="r")
+    labels = np.load(labels_path, allow_pickle=False).astype(str).tolist()
+    if windows.shape[0] != len(labels):
+        raise ValueError(f"Window/label count mismatch: {split_path} has {windows.shape[0]}, {labels_path} has {len(labels)}")
     return windows, labels
 
 

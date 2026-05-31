@@ -26,7 +26,7 @@ PREPROCESS_DIR = ROOT_DIR / "data preprocessing"
 sys.path.insert(0, str(PREPROCESS_DIR))
 
 from augmentation import MixupCollator  # noqa: E402
-from dataset import CSIDataset, build_weighted_sampler, load_processed_npz  # noqa: E402
+from dataset import CSIDataset, build_weighted_sampler, load_processed_split  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -62,11 +62,21 @@ def select_device(name: str) -> torch.device:
     return torch.device(name)
 
 
-def load_split(npz_path: Path | None) -> tuple[list[np.ndarray], list[str]] | None:
-    if npz_path is None or not npz_path.exists():
+def log(message: str = "") -> None:
+    print(message, flush=True)
+
+
+def load_split(split_path: Path | None) -> tuple[Any, list[str]] | None:
+    if split_path is None or not split_path.exists():
         return None
-    windows, labels = load_processed_npz(npz_path)
+    log(f"[Load] {split_path}")
+    windows, labels = load_processed_split(split_path)
+    log(f"[Load] samples={len(labels)}, shape={getattr(windows, 'shape', 'list')}")
     return windows, labels
+
+
+def configured_data_path(data_cfg: dict[str, Any], split: str) -> str | None:
+    return data_cfg.get(f"{split}_path") or data_cfg.get(f"{split}_npz")
 
 
 def build_label_map(train_labels: list[str], configured_labels: list[str] | None) -> dict[str, int]:
@@ -101,6 +111,7 @@ def run_epoch(
     device: torch.device,
     scaler: torch.cuda.amp.GradScaler | None = None,
     use_amp: bool = False,
+    log_interval: int = 50,
 ) -> dict[str, float]:
     is_train = optimizer is not None
     model.train(is_train)
@@ -110,7 +121,7 @@ def run_epoch(
     targets_all: list[int] = []
 
     iterator = tqdm(loader, desc="train" if is_train else "eval", leave=False)
-    for x, y in iterator:
+    for batch_idx, (x, y) in enumerate(iterator, start=1):
         x = x.to(device, non_blocking=True)
         y = y.to(device, non_blocking=True)
 
@@ -141,6 +152,12 @@ def run_epoch(
             targets_all.extend(y.detach().cpu().numpy().tolist())
 
         iterator.set_postfix(loss=np.mean(losses), acc=accuracy_score(targets_all, preds))
+        if log_interval > 0 and (batch_idx % log_interval == 0 or batch_idx == len(loader)):
+            log(
+                f"[{'train' if is_train else 'eval'}] "
+                f"batch {batch_idx}/{len(loader)} "
+                f"loss={np.mean(losses):.4f} acc={accuracy_score(targets_all, preds):.4f}"
+            )
 
     return {
         "loss": float(np.mean(losses)) if losses else 0.0,
@@ -233,11 +250,11 @@ def main() -> None:
     set_seed(int(cfg["train"].get("seed", 42)))
     device = select_device(str(cfg["train"].get("device", "auto")))
 
-    train_split = load_split(resolve_path(cfg["data"]["train_npz"], base_dir))
+    train_split = load_split(resolve_path(configured_data_path(cfg["data"], "train"), base_dir))
     if train_split is None:
-        raise FileNotFoundError(f"Train npz not found: {cfg['data']['train_npz']}")
-    val_split = load_split(resolve_path(cfg["data"].get("val_npz"), base_dir))
-    test_split = load_split(resolve_path(cfg["data"].get("test_npz"), base_dir))
+        raise FileNotFoundError(f"Train split not found: {configured_data_path(cfg['data'], 'train')}")
+    val_split = load_split(resolve_path(configured_data_path(cfg["data"], "val"), base_dir))
+    test_split = load_split(resolve_path(configured_data_path(cfg["data"], "test"), base_dir))
 
     train_windows, train_labels = train_split
     label_map = build_label_map(train_labels, cfg["data"].get("labels"))
@@ -307,9 +324,9 @@ def main() -> None:
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=int(cfg["train"]["epochs"]))
     scaler = torch.cuda.amp.GradScaler(enabled=bool(cfg["train"].get("use_amp", True)) and device.type == "cuda")
 
-    print(f"Device: {device}")
-    print(f"Input shape: [N, T, {n_features}], classes: {class_names}")
-    print(f"Trainable parameters: {count_parameters(model):,}")
+    log(f"Device: {device}")
+    log(f"Input shape: [N, T, {n_features}], classes: {class_names}")
+    log(f"Trainable parameters: {count_parameters(model):,}")
 
     history: list[dict[str, Any]] = []
     best_metric = -1.0
@@ -325,10 +342,18 @@ def main() -> None:
             device,
             scaler=scaler,
             use_amp=bool(cfg["train"].get("use_amp", True)),
+            log_interval=int(cfg["train"].get("log_interval", 50)),
         )
 
         if val_loader is not None:
-            val_metrics = run_epoch(model, val_loader, None, criterion, device)
+            val_metrics = run_epoch(
+                model,
+                val_loader,
+                None,
+                criterion,
+                device,
+                log_interval=int(cfg["train"].get("log_interval", 50)),
+            )
             monitor = val_metrics["macro_f1"]
         else:
             val_metrics = {}
@@ -343,7 +368,7 @@ def main() -> None:
         }
         history.append(row)
 
-        print(
+        log(
             f"Epoch {epoch:03d} | "
             f"train loss={train_metrics['loss']:.4f} acc={train_metrics['accuracy']:.4f} f1={train_metrics['macro_f1']:.4f} | "
             f"val acc={val_metrics.get('accuracy', 0.0):.4f} f1={val_metrics.get('macro_f1', 0.0):.4f}"
@@ -366,7 +391,7 @@ def main() -> None:
         else:
             bad_epochs += 1
             if bad_epochs >= patience:
-                print(f"Early stopping at epoch {epoch}; best macro_f1={best_metric:.4f}")
+                log(f"Early stopping at epoch {epoch}; best macro_f1={best_metric:.4f}")
                 break
 
     save_checkpoint(
@@ -397,15 +422,15 @@ def main() -> None:
             output_dict=True,
         )
         save_confusion_matrix(y_true, y_pred, class_names, output_dir / "confusion_matrix.png")
-        print(f"\n{eval_name} classification report:")
-        print(classification_report(y_true, y_pred, labels=list(range(n_classes)), target_names=class_names, zero_division=0))
+        log(f"\n{eval_name} classification report:")
+        log(classification_report(y_true, y_pred, labels=list(range(n_classes)), target_names=class_names, zero_division=0))
 
     (output_dir / "metrics.json").write_text(
         json.dumps({"history": history, "best_metric": best_metric, "eval": report}, indent=2),
         encoding="utf-8",
     )
     (output_dir / "label_map.json").write_text(json.dumps(label_map, indent=2), encoding="utf-8")
-    print(f"\nSaved outputs to: {output_dir}")
+    log(f"\nSaved outputs to: {output_dir}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,9 @@
+{
+  "run": 0,
+  "fall": 1,
+  "walk": 2,
+  "turn": 3,
+  "jump": 4,
+  "squat": 5,
+  "arm_wave": 6
+}

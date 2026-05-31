@@ -199,10 +199,10 @@ def soft_cross_entropy(logits, targets):
 ## 在训练脚本中加载
 
 ```python
-from dataset import CSIDataset, load_processed_npz
+from dataset import CSIDataset, load_processed_split
 from torch.utils.data import DataLoader
 
-windows, labels = load_processed_npz("processed/train_windows.npz")
+windows, labels = load_processed_split("processed/train_windows.npz")
 label_map = {
     "idle": 0,
     "walking": 1,
@@ -243,6 +243,8 @@ feat = extract_all_features(
     },
 )
 ```
+
+`load_processed_split` 也支持大数据推荐格式：`train_windows.npy` + 同目录 `train_labels.npy`。`.npy` 会用 mmap 懒加载，避免训练开始时一次性把全部窗口读进内存。
 
 配置里的 `temporal_stats` 和 `diff_stats` 可以直接写列表；也可以设为 `false` 禁用对应特征。
 

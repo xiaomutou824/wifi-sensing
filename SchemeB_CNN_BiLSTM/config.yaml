@@ -1,7 +1,7 @@
 data:
-  train_npz: "../data preprocessing/processed/train_windows.npz"
-  val_npz: "../data preprocessing/processed/val_windows.npz"
-  test_npz: "../data preprocessing/processed/test_windows.npz"
+  train_path: "../data preprocessing/processed/train_windows.npz"
+  val_path: "../data preprocessing/processed/val_windows.npz"
+  test_path: "../data preprocessing/processed/test_windows.npz"
   output_dir: "./output"
   labels: ["idle", "walking", "sitting_down", "standing_up", "fall"]
 
@@ -15,6 +15,7 @@ train:
   seed: 42
   device: "auto"
   use_amp: true
+  log_interval: 50
 
 model:
   cnn_channels: [32, 64, 128]

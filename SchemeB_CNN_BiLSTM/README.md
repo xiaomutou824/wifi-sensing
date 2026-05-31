@@ -15,9 +15,9 @@
 | 文件 | 说明 |
 | --- | --- |
 | `model.py` | `CNNBiLSTM` 模型定义，支持可选 Multi-Head Attention |
-| `train.py` | 训练入口，读取 `.npz` 窗口数据并保存 checkpoint |
+| `train.py` | 训练入口，读取 `.npy`/`.npz` 窗口数据并保存 checkpoint |
 | `predict_npz.py` | 对 `.npz` 数据做推理和评估 |
-| `prepare_espfi_har.py` | 将 ESP-Fi HAR `.mat` 原始数据转换为本模型可训练的 `.npz` |
+| `prepare_espfi_har.py` | 将 ESP-Fi HAR `.mat` 原始数据转换为本模型可训练的 `.npy`/`.npz` |
 | `config.yaml` | 本项目自采 5 类动作数据的默认配置 |
 | `config_espfi_har.yaml` | ESP-Fi HAR 7 类动作训练配置 |
 | `requirements.txt` | 训练依赖 |
@@ -88,7 +88,8 @@ python3 SchemeB_CNN_BiLSTM/prepare_espfi_har.py \
   --output-dir datasets/ESP-Fi-HAR/processed_cnn_bilstm \
   --window-size 256 \
   --stride 128 \
-  --split-mode subject
+  --split-mode subject \
+  --output-format npy
 ```
 
 默认设置：
@@ -108,12 +109,17 @@ python3 SchemeB_CNN_BiLSTM/prepare_espfi_har.py \
 
 ```text
 datasets/ESP-Fi-HAR/processed_cnn_bilstm/
-├── train_windows.npz
-├── val_windows.npz
-├── test_windows.npz
+├── train_windows.npy
+├── train_labels.npy
+├── val_windows.npy
+├── val_labels.npy
+├── test_windows.npy
+├── test_labels.npy
 ├── summary.json
-└── window_meta.json
+└── window_meta.json  # 仅使用 --save-meta 时生成
 ```
+
+默认使用 `.npy`，预处理时两遍扫描并写入内存映射文件，不会把所有窗口同时堆在内存里。训练时也会 mmap 懒加载。只有小数据或兼容旧流程时才建议加 `--output-format npz`。
 
 当前默认转换后的规模为：
 

@@ -1,7 +1,7 @@
 data:
-  train_npz: "../datasets/ESP-Fi-HAR/processed_cnn_bilstm/train_windows.npz"
-  val_npz: "../datasets/ESP-Fi-HAR/processed_cnn_bilstm/val_windows.npz"
-  test_npz: "../datasets/ESP-Fi-HAR/processed_cnn_bilstm/test_windows.npz"
+  train_path: "../datasets/ESP-Fi-HAR/processed_cnn_bilstm/train_windows.npy"
+  val_path: "../datasets/ESP-Fi-HAR/processed_cnn_bilstm/val_windows.npy"
+  test_path: "../datasets/ESP-Fi-HAR/processed_cnn_bilstm/test_windows.npy"
   output_dir: "./output_espfi_har"
   labels: ["run", "fall", "walk", "turn", "jump", "squat", "arm_wave"]
 
@@ -15,6 +15,7 @@ train:
   seed: 42
   device: "auto"
   use_amp: true
+  log_interval: 50
 
 model:
   cnn_channels: [32, 64, 128]
