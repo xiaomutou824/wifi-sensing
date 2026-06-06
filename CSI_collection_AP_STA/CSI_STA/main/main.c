@@ -25,9 +25,11 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
+#include "lcd.h"
 #include "lwip/ip_addr.h"
 #include "nvs_flash.h"
 #include "ping/ping_sock.h"
+#include "spi.h"
 
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
@@ -57,8 +59,64 @@ static volatile uint32_t csi_null_count;
 static volatile uint32_t csi_rx_seq_gap_count;
 static volatile uint32_t ping_success_count;
 static volatile uint32_t ping_timeout_count;
+static volatile uint32_t lcd_connection_state_version;
 static uint16_t last_rx_seq;
 static bool last_rx_seq_valid;
+
+typedef enum {
+  LCD_STA_STATE_BOOT = 0,
+  LCD_STA_STATE_CONNECTING,
+  LCD_STA_STATE_RETRYING,
+  LCD_STA_STATE_CONNECTED,
+  LCD_STA_STATE_FAILED,
+} lcd_sta_state_t;
+
+static volatile lcd_sta_state_t lcd_connection_state = LCD_STA_STATE_BOOT;
+
+static const char *lcd_state_name(lcd_sta_state_t state) {
+  return state == LCD_STA_STATE_CONNECTED ? "1" : "0";
+}
+
+static void lcd_set_connection_state(lcd_sta_state_t state) {
+  if (lcd_connection_state != state) {
+    lcd_connection_state = state;
+    lcd_connection_state_version++;
+  }
+}
+
+static void lcd_draw_status(void) {
+  char line[32];
+
+  lcd_clear(WHITE);
+  lcd_show_string(0, 0, 160, 16, 16, "WiFi STA Test", RED);
+  snprintf(line, sizeof(line), "Connection state:%s",
+           lcd_state_name(lcd_connection_state));
+  lcd_show_string(0, 20, 160, 16, 16, line, BLUE);
+#if CONFIG_CSI_ENABLE_SELF_PING
+  snprintf(line, sizeof(line), "CSI FPS:%d", CONFIG_CSI_SELF_PING_RATE_HZ);
+#else
+  snprintf(line, sizeof(line), "CSI FPS:manual");
+#endif
+  lcd_show_string(0, 40, 160, 16, 16, line, BLUE);
+  snprintf(line, sizeof(line), "Baud rate:%d", CONFIG_ESPTOOLPY_MONITOR_BAUD);
+  lcd_show_string(0, 60, 160, 16, 16, line, BLUE);
+}
+
+static void lcd_status_task(void *arg) {
+  (void)arg;
+  uint32_t last_version = UINT32_MAX;
+
+  spi2_init();
+  lcd_init();
+
+  while (true) {
+    if (last_version != lcd_connection_state_version) {
+      lcd_draw_status();
+      last_version = lcd_connection_state_version;
+    }
+    vTaskDelay(pdMS_TO_TICKS(500));
+  }
+}
 
 static int append_text(char *buf, size_t buf_size, int offset,
                        const char *fmt, ...) {
@@ -132,17 +190,20 @@ static void sta_event_handler(void *arg, esp_event_base_t event_base,
                               int32_t event_id, void *event_data) {
   (void)arg;
   if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+    lcd_set_connection_state(LCD_STA_STATE_CONNECTING);
     esp_wifi_connect();
   } else if (event_base == WIFI_EVENT &&
              event_id == WIFI_EVENT_STA_DISCONNECTED) {
     wifi_ip_info_valid = false;
     connected_ap_bssid_valid = false;
     if (retry_count < WIFI_MAXIMUM_RETRY) {
+      lcd_set_connection_state(LCD_STA_STATE_RETRYING);
       retry_count++;
       ESP_LOGW(TAG, "Wi-Fi disconnected, retrying (%d/%d)", retry_count,
                WIFI_MAXIMUM_RETRY);
       esp_wifi_connect();
     } else {
+      lcd_set_connection_state(LCD_STA_STATE_FAILED);
       xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
     }
   } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
@@ -150,6 +211,7 @@ static void sta_event_handler(void *arg, esp_event_base_t event_base,
     retry_count = 0;
     wifi_ip_info = event->ip_info;
     wifi_ip_info_valid = true;
+    lcd_set_connection_state(LCD_STA_STATE_CONNECTED);
     ESP_LOGI(TAG, "STA connected, IP: " IPSTR ", gateway: " IPSTR,
              IP2STR(&event->ip_info.ip), IP2STR(&event->ip_info.gw));
     xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
@@ -415,6 +477,7 @@ void app_main(void) {
   init_nvs();
   ESP_LOGI(TAG, "ESP32-S3 role: STA CSI receiver, node=%d",
            CONFIG_CSI_NODE_ID);
+  xTaskCreate(lcd_status_task, "lcd_status", 4096, NULL, 1, NULL);
   ESP_ERROR_CHECK(wifi_init_sta());
   ESP_ERROR_CHECK(csi_init());
   ESP_ERROR_CHECK(start_ap_gateway_ping());

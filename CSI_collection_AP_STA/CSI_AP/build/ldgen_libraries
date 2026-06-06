@@ -161,4 +161,6 @@
 /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/usb/libusb.a
 /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/wifi_provisioning/libwifi_provisioning.a
 /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/json/libjson.a
+/home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/BSP/libBSP.a
 /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/main/libmain.a
+/home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/BSP/libBSP.a

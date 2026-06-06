@@ -28,7 +28,7 @@ def parse_args() -> argparse.Namespace:
         description="Show ESP32-S3 CSI data live and save it to CSV."
     )
     parser.add_argument("--port", required=True, help="Serial port, e.g. COM3 or /dev/ttyUSB0")
-    parser.add_argument("--baud", type=int, default=921600, help="Serial baud rate")
+    parser.add_argument("--baud", type=int, default=115200, help="Serial baud rate")
     parser.add_argument("--label", default="unlabeled", help="Activity label")
     parser.add_argument("--node", default=None, help="Optional expected node id")
     parser.add_argument("--out-dir", default="data", help="Output directory")

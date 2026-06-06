@@ -6,6 +6,7 @@
  */
 
 #include <inttypes.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "esp_check.h"
@@ -15,14 +16,42 @@
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "lcd.h"
 #include "nvs_flash.h"
+#include "spi.h"
 
 #define MAC_STR "%02x:%02x:%02x:%02x:%02x:%02x"
 #define MAC_ARG(mac) (mac)[0], (mac)[1], (mac)[2], (mac)[3], (mac)[4], (mac)[5]
 
 static const char *TAG = "csi_ap";
+static volatile uint32_t sta_current_count;
 static volatile uint32_t sta_connected_count;
 static volatile uint32_t sta_disconnected_count;
+
+static void lcd_draw_status(void) {
+  char line[32];
+
+  lcd_clear(WHITE);
+  lcd_show_string(0, 0, 160, 16, 16, "WiFi AP Test", RED);
+  lcd_show_string(0, 20, 160, 16, 16, "SSID:" CONFIG_CSI_AP_SSID, BLUE);
+  lcd_show_string(0, 40, 160, 16, 16, "PASSWORD:" CONFIG_CSI_AP_PASSWORD,
+                  BLUE);
+  snprintf(line, sizeof(line), "Connection count:%" PRIu32,
+           sta_current_count);
+  lcd_show_string(0, 60, 160, 16, 16, line, BLUE);
+}
+
+static void lcd_status_task(void *arg) {
+  (void)arg;
+
+  spi2_init();
+  lcd_init();
+
+  while (true) {
+    lcd_draw_status();
+    vTaskDelay(pdMS_TO_TICKS(500));
+  }
+}
 
 static void init_nvs(void) {
   esp_err_t ret = nvs_flash_init();
@@ -40,6 +69,7 @@ static void ap_event_handler(void *arg, esp_event_base_t event_base,
   if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STACONNECTED) {
     wifi_event_ap_staconnected_t *event =
         (wifi_event_ap_staconnected_t *)event_data;
+    sta_current_count++;
     sta_connected_count++;
     ESP_LOGI(TAG, "STA connected: " MAC_STR ", aid=%d", MAC_ARG(event->mac),
              event->aid);
@@ -47,6 +77,9 @@ static void ap_event_handler(void *arg, esp_event_base_t event_base,
              event_id == WIFI_EVENT_AP_STADISCONNECTED) {
     wifi_event_ap_stadisconnected_t *event =
         (wifi_event_ap_stadisconnected_t *)event_data;
+    if (sta_current_count > 0) {
+      sta_current_count--;
+    }
     sta_disconnected_count++;
     ESP_LOGW(TAG, "STA disconnected: " MAC_STR ", aid=%d", MAC_ARG(event->mac),
              event->aid);
@@ -102,15 +135,16 @@ static void ap_stats_task(void *arg) {
   (void)arg;
   while (true) {
     vTaskDelay(pdMS_TO_TICKS(CONFIG_CSI_STATS_INTERVAL_SEC * 1000));
-    ESP_LOGI(TAG, "AP stats: sta_connected=%" PRIu32
+    ESP_LOGI(TAG, "AP stats: sta_current=%" PRIu32 ", sta_connected=%" PRIu32
                   ", sta_disconnected=%" PRIu32,
-             sta_connected_count, sta_disconnected_count);
+             sta_current_count, sta_connected_count, sta_disconnected_count);
   }
 }
 
 void app_main(void) {
   init_nvs();
   ESP_LOGI(TAG, "ESP32-S3 role: AP endpoint");
+  xTaskCreate(lcd_status_task, "lcd_status", 4096, NULL, 2, NULL);
   ESP_ERROR_CHECK(wifi_init_ap());
   xTaskCreate(ap_stats_task, "ap_stats", 3072, NULL, 2, NULL);
 }

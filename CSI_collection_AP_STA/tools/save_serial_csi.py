@@ -24,9 +24,17 @@ def parse_args() -> argparse.Namespace:
         description="Read CSI_DATA lines from ESP32-S3 serial output and save CSV."
     )
     parser.add_argument("--port", required=True, help="Serial port, e.g. COM3 or /dev/ttyUSB0")
-    parser.add_argument("--baud", type=int, default=921600, help="Serial baud rate")
-    parser.add_argument("--label", default="unlabeled", help="Activity label")
-    parser.add_argument("--node", default=None, help="Optional expected node id")
+    parser.add_argument("--baud", type=int, default=115200, help="Serial baud rate")
+    parser.add_argument("--scene", required=True, type=int, help="Scene ID, e.g. 1=bedroom, 2=meetingroom")
+    parser.add_argument("--participant", required=True, type=int, help="Participant ID")
+    parser.add_argument("--action", required=True, type=int, help="Action class ID, e.g. 1=idle")
+    parser.add_argument("--node", required=True, type=int, help="Node ID, 1-3")
+    parser.add_argument("--repeat", required=True, type=int, help="Repeat trial ID")
+    parser.add_argument(
+        "--label",
+        default=None,
+        help="Optional human-readable activity label written inside the CSV. Defaults to action ID.",
+    )
     parser.add_argument("--out-dir", default="data", help="Output directory")
     parser.add_argument(
         "--max-rows",
@@ -39,12 +47,21 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if not 1 <= args.node <= 3:
+        print(f"Invalid node ID {args.node}; expected 1, 2, or 3.", file=sys.stderr)
+        return 2
+
     out_dir = pathlib.Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    node_part = f"node{args.node}_" if args.node else ""
-    out_path = out_dir / f"{node_part}{args.label}_{stamp}.csv"
+    out_path = out_dir / (
+        f"{args.scene}-{args.participant}-{args.action}-{args.node}-{args.repeat}.csv"
+    )
+    if out_path.exists():
+        print(f"Output file already exists: {out_path}", file=sys.stderr)
+        return 2
+
+    label = args.label if args.label is not None else str(args.action)
 
     print(f"Opening {args.port} at {args.baud} baud")
     print(f"Saving CSI rows to {out_path}")
@@ -78,14 +95,14 @@ def main() -> int:
             if len(parts) < len(HEADER):
                 continue
 
-            if args.node is not None and parts[1] != str(args.node):
+            if parts[1] != str(args.node):
                 continue
 
             meta = parts[: len(HEADER)]
             csi_bytes = parts[len(HEADER) :]
             writer.writerow([
                 dt.datetime.now().isoformat(timespec="microseconds"),
-                args.label,
+                label,
                 *meta,
                 " ".join(csi_bytes),
             ])

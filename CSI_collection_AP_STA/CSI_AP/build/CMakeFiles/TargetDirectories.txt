@@ -862,6 +862,13 @@
 /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/wifi_provisioning/CMakeFiles/install.dir
 /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/wifi_provisioning/CMakeFiles/install/local.dir
 /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/wifi_provisioning/CMakeFiles/install/strip.dir
+/home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/BSP/CMakeFiles/__idf_BSP.dir
+/home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/BSP/CMakeFiles/edit_cache.dir
+/home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/BSP/CMakeFiles/rebuild_cache.dir
+/home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/BSP/CMakeFiles/list_install_components.dir
+/home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/BSP/CMakeFiles/install.dir
+/home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/BSP/CMakeFiles/install/local.dir
+/home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/BSP/CMakeFiles/install/strip.dir
 /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/main/CMakeFiles/__idf_main.dir
 /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/main/CMakeFiles/edit_cache.dir
 /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/main/CMakeFiles/rebuild_cache.dir

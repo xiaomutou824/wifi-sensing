@@ -12,6 +12,9 @@ env/
 Thumbs.db
 
 # Large datasets and generated data
+docs/
+references/
+ESP-32/
 datasets/ESP-Fi-HAR/
 *.rar
 *.npz

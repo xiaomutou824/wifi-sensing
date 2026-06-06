@@ -1,0 +1,8 @@
+Command: ninja all
+[1/4] cd /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/esp-idf/esptool_py && /home/xing/.espressif/python_env/idf5.5_py3.10_env/bin/python /home/xing/.espressif/v5.5.4/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/partition_table/partition-table.bin /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/csi_ap.bin
+csi_ap.bin binary size 0xc2a10 bytes. Smallest app partition is 0x100000 bytes. 0x3d5f0 bytes (24%) free.
+[2/4] Performing build step for 'bootloader'
+[1/1] cd /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/bootloader/esp-idf/esptool_py && /home/xing/.espressif/python_env/idf5.5_py3.10_env/bin/python /home/xing/.espressif/v5.5.4/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x0 /home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_AP/build/bootloader/bootloader.bin
+Bootloader binary size 0x5170 bytes. 0x2e90 bytes (36%) free.
+[3/4] No install step for 'bootloader'
+[4/4] Completed 'bootloader'

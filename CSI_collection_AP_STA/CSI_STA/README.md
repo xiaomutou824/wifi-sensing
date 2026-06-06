@@ -8,7 +8,7 @@ ESP32-S3 B 板工程：连接 `CSI_AP`，开启 CSI，并 ping AP 网关生成�
 SSID: CSI_AP_S3
 Password: 12345678
 Channel: 6
-Ping rate: 30 Hz
+Ping rate: 100 Hz
 ```
 
 烧录：
@@ -25,5 +25,5 @@ idf.py -p /dev/ttyUSB1 flash monitor
 保存数据时退出 monitor，然后在上一级工程使用保存脚本：
 
 ```bash
-python3 tools/save_serial_csi.py --port /dev/ttyUSB1 --baud 921600 --label idle --node 1
+python3 tools/save_serial_csi.py --port /dev/ttyUSB1 --baud 115200 --scene 1 --participant 1 --action 1 --node 1 --repeat 1 --label idle
 ```

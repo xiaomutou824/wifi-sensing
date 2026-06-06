@@ -59,31 +59,31 @@ Ctrl + ]
 
 ```bash
 cd /home/xing/project/wifi-sensing/CSI_collection_AP_STA
-python3 tools/save_serial_csi.py --port /dev/ttyUSB0 --baud 921600 --label idle --node 1
+python3 tools/save_serial_csi.py --port /dev/ttyUSB0 --baud 115200 --scene 1 --participant 1 --action 1 --node 1 --repeat 1 --label idle
 ```
 
 AP 端不输出 CSI，保存数据只保存 STA 端。
 
-默认保存 `1000` 条 CSI 行后自动停止。输出文件会写到 `data/` 目录，文件名类似：
+默认保存 `1000` 条 CSI 行后自动停止。输出文件会写到 `data/` 目录，文件名格式为 `X-Y-Z-M-N.csv`：
 
 ```text
-data/node1_idle_20260528_004517.csv
+data/1-1-1-1-1.csv
 ```
 
 常用参数：
 
 ```bash
 # 采集 walking，保存到默认 data/，1000 帧后停止
-python3 tools/save_serial_csi.py --port /dev/ttyUSB0 --baud 921600 --label walking --node 1
+python3 tools/save_serial_csi.py --port /dev/ttyUSB0 --baud 115200 --scene 1 --participant 1 --action 2 --node 1 --repeat 1 --label walking
 
 # 改为采集 1500 帧
-python3 tools/save_serial_csi.py --port /dev/ttyUSB0 --baud 921600 --label fall --node 1 --max-rows 1500
+python3 tools/save_serial_csi.py --port /dev/ttyUSB0 --baud 115200 --scene 1 --participant 1 --action 3 --node 1 --repeat 1 --label fall --max-rows 1500
 
 # 不自动停止，手动 Ctrl+C 结束
-python3 tools/save_serial_csi.py --port /dev/ttyUSB0 --baud 921600 --label idle --node 1 --max-rows 0
+python3 tools/save_serial_csi.py --port /dev/ttyUSB0 --baud 115200 --scene 1 --participant 1 --action 1 --node 1 --repeat 1 --label idle --max-rows 0
 
 # 保存到指定目录
-python3 tools/save_serial_csi.py --port /dev/ttyUSB0 --baud 921600 --label idle --node 1 --out-dir data/session_01
+python3 tools/save_serial_csi.py --port /dev/ttyUSB0 --baud 115200 --scene 1 --participant 1 --action 1 --node 1 --repeat 1 --label idle --out-dir data/session_01
 ```
 
 ## 4. 实时查看 CSI
@@ -92,7 +92,7 @@ python3 tools/save_serial_csi.py --port /dev/ttyUSB0 --baud 921600 --label idle 
 
 ```bash
 cd /home/xing/project/wifi-sensing/CSI_collection_AP_STA
-python3 tools/live_csi_monitor.py --port /dev/ttyUSB0 --baud 921600 --label idle --node 1
+python3 tools/live_csi_monitor.py --port /dev/ttyUSB0 --baud 115200 --label idle --node 1
 ```
 
 常用参数：
@@ -115,7 +115,7 @@ python3 tools/live_csi_monitor.py --port /dev/ttyUSB0 --label idle --node 1 --no
 采集完一个 CSV 后，先跑质量检查：
 
 ```bash
-python3 tools/inspect_csi_settings.py data/node1_idle_20260528_004517.csv
+python3 tools/inspect_csi_settings.py data/1-1-1-1-1.csv
 ```
 
 重点看这些输出：
@@ -132,7 +132,7 @@ python3 tools/inspect_csi_settings.py data/node1_idle_20260528_004517.csv
 用 `visualize_csi.py` 把保存好的 CSV 画成图片：
 
 ```bash
-python3 tools/visualize_csi.py data/node1_idle_20260528_004517.csv
+python3 tools/visualize_csi.py data/1-1-1-1-1.csv
 ```
 
 默认输出到 `figures/`，会生成三张图：
@@ -145,16 +145,16 @@ python3 tools/visualize_csi.py data/node1_idle_20260528_004517.csv
 
 ```bash
 # 去掉始终为 0 的子载波后再画图
-python3 tools/visualize_csi.py data/node1_idle_20260528_004517.csv --drop-zero-subcarriers
+python3 tools/visualize_csi.py data/1-1-1-1-1.csv --drop-zero-subcarriers
 
 # 只画前 500 帧
-python3 tools/visualize_csi.py data/node1_idle_20260528_004517.csv --max-frames 500
+python3 tools/visualize_csi.py data/1-1-1-1-1.csv --max-frames 500
 
 # 只保留 64 对 I/Q 的帧，过滤异常长度
-python3 tools/visualize_csi.py data/node1_idle_20260528_004517.csv --expected-iq-pairs 64
+python3 tools/visualize_csi.py data/1-1-1-1-1.csv --expected-iq-pairs 64
 
 # 指定输出目录
-python3 tools/visualize_csi.py data/node1_idle_20260528_004517.csv --out-dir figures/session_01
+python3 tools/visualize_csi.py data/1-1-1-1-1.csv --out-dir figures/session_01
 ```
 
 ## 7. 推荐采集流程
@@ -163,13 +163,13 @@ python3 tools/visualize_csi.py data/node1_idle_20260528_004517.csv --out-dir fig
 
 ```bash
 # 1. 采集 1000 帧
-python3 tools/save_serial_csi.py --port /dev/ttyUSB0 --baud 921600 --label idle --node 1
+python3 tools/save_serial_csi.py --port /dev/ttyUSB0 --baud 115200 --scene 1 --participant 1 --action 1 --node 1 --repeat 1 --label idle
 
 # 2. 检查质量
-python3 tools/inspect_csi_settings.py data/node1_idle_YYYYMMDD_HHMMSS.csv
+python3 tools/inspect_csi_settings.py data/1-1-1-1-1.csv
 
 # 3. 生成图像，肉眼确认 CSI 是否稳定/有动作变化
-python3 tools/visualize_csi.py data/node1_idle_YYYYMMDD_HHMMSS.csv --drop-zero-subcarriers --expected-iq-pairs 64
+python3 tools/visualize_csi.py data/1-1-1-1-1.csv --drop-zero-subcarriers --expected-iq-pairs 64
 ```
 
 建议至少采集这些标签：

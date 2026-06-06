@@ -569,6 +569,11 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
+  include("/home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA/build/esp-idf/BSP/cmake_install.cmake")
+endif()
+
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for the subdirectory.
   include("/home/xing/project/wifi-sensing/CSI_collection_AP_STA/CSI_STA/build/esp-idf/main/cmake_install.cmake")
 endif()
 
